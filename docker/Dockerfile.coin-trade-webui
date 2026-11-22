@@ -1,0 +1,19 @@
+FROM denoland/deno:alpine-2.9.5
+
+WORKDIR /app
+
+ENV DENO_DIR=/app/.cache/deno
+ENV PORT=8013
+
+COPY deno.json ./
+COPY src/ ./src/
+
+RUN mkdir -p /app/data /app/.cache/deno && \
+    deno cache --allow-import src/coin_trade_webui/webui/main.ts && \
+    chown -R deno:deno /app
+
+USER deno
+
+EXPOSE 8013
+
+CMD ["run", "--allow-net", "--allow-env", "--allow-read", "src/coin_trade_webui/webui/main.ts"]

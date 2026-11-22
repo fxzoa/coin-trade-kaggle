@@ -221,3 +221,17 @@ services:
       - ./conf/multi_dca_webui/.env
     environment:
       - PORT=8008
+
+  coin-trade-webui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.coin-trade-webui
+    image: nanbingjun/coin-trade-webui:latest
+    container_name: coin-trade-webui
+    restart: unless-stopped
+    ports:
+      - "8013:8013"
+    env_file:
+      - ./conf/coin_trade_webui/.env
+    environment:
+      - PORT=8013
