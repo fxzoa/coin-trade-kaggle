@@ -35,7 +35,7 @@ export class TrackerHttpServer {
     port: number = DEFAULT_PORT,
     serviceOrDb: TrackerService | TrackerDatabase,
     dbOrService?: TrackerDatabase | TrackerService | null,
-    publicDir: string = './src/webui/public',
+    publicDir: string = './src/top20_webui/public',
   ) {
     this.port = port;
     this.publicDir = publicDir;
