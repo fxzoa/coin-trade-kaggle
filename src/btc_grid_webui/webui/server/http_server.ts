@@ -65,7 +65,7 @@ export class BtcGridHttpServer {
   constructor(
     port = 8000,
     store: AppKvStore,
-    publicDir = './src/webui/public'
+    publicDir = './src/btc_grid_webui/webui/public'
   ) {
     this.port = port;
     this.store = store;

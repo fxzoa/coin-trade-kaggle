@@ -141,7 +141,7 @@ export class HlPriceWebuiServer {
 
   constructor(
     port: number = DEFAULT_WEBUI_PORT,
-    publicDir: string = "./src/webui/public",
+    publicDir: string = "./src/surge_dip_webui/webui/public",
   ) {
     this.port = port;
     this.publicDir = publicDir;
