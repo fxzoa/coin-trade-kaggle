@@ -81,6 +81,15 @@ export function parseConfig(
 
     // === 基盤用BOT ===
     {
+      key: "syncer",
+      name: "Price Change Monitor",
+      category: "Infrastructure",
+      description: "リアルタイム価格同期 & Redis配信基盤",
+      targetUrl: env.URL_PRICE_SYNCER || "http://localhost:8005",
+      healthEndpoint: "/api/status",
+      directPort: 8005,
+    },
+    {
       key: "top20",
       name: "Top20 Coin Tracker",
       category: "Infrastructure",
