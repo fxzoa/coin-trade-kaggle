@@ -94,9 +94,16 @@ export class AppKvStore {
         logger.error(`[AppKvStore/Redis] エラー:`, toError(err));
       });
 
-      // 疎通確認
-      await this.client.ping();
-      logger.info(`[AppKvStore] Redis データストア初期化完了: ${this.redisUrl} (Prefix: ${this.prefix})`);
+      // 疎通確認（Redis未接続時でもWebUI起動を継続）
+      try {
+        await Promise.race([
+          this.client.ping(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Redis ping timeout')), 1500)),
+        ]);
+        logger.info(`[AppKvStore] Redis データストア初期化完了: ${this.redisUrl} (Prefix: ${this.prefix})`);
+      } catch (redisErr: unknown) {
+        logger.warn(`[AppKvStore] Redis 初期接続失敗 (オフライン継続モードで起動):`, toError(redisErr));
+      }
     } catch (err: unknown) {
       const error = toError(err);
       logger.error(`[AppKvStore] 初期化失敗:`, error);

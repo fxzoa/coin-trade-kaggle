@@ -321,24 +321,31 @@ export class BtcGridHttpServer {
     });
   }
 
-  /** GET /health (KV へ実際に読み取りを行い、失敗時は 503 を返す) */
+  /** GET /health (KV へ実際に読み取りを行い、Redis未接続時も200 degradedで応答) */
   private async handleHealth(): Promise<Response> {
     try {
-      const currentPrice = await this.store.getCurrentPrice();
+      const currentPrice = await Promise.race([
+        this.store.getCurrentPrice(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1000)),
+      ]);
       return this.jsonResponse({
         status: 'ok',
         app: APP_NAME,
         time: getJstIsoString(),
         currentPrice,
-        database: 'connected',
+        database: currentPrice !== null ? 'connected' : 'degraded',
       });
     } catch (err: unknown) {
       const error = toError(err);
-      logger.error('[HttpServer] /health DB確認エラー:', error);
-      return this.jsonResponse(
-        { status: 'error', app: APP_NAME, time: getJstIsoString(), database: 'disconnected', error: error.message },
-        503
-      );
+      logger.warn('[HttpServer] /health DB確認警告:', error);
+      return this.jsonResponse({
+        status: 'ok',
+        app: APP_NAME,
+        time: getJstIsoString(),
+        currentPrice: null,
+        database: 'disconnected',
+        warning: error.message,
+      });
     }
   }
 

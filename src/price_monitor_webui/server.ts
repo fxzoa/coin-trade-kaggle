@@ -226,11 +226,16 @@ export function createWebServer(options?: WebServerOptions) {
       // 1. GET /api/status
       if (url.pathname === "/api/status") {
         let redisConnected = false;
-        try {
-          const pong = await redis.ping();
-          redisConnected = pong === "PONG";
-        } catch {
-          redisConnected = false;
+        if (redis.status === "ready") {
+          try {
+            const pong = await Promise.race([
+              redis.ping(),
+              new Promise<string>((_, reject) => setTimeout(() => reject(new Error("timeout")), 800)),
+            ]);
+            redisConnected = pong === "PONG";
+          } catch {
+            redisConnected = false;
+          }
         }
 
         // 証拠金不足クールダウン状態の取得
@@ -240,21 +245,23 @@ export function createWebServer(options?: WebServerOptions) {
           expiresAt?: string;
           remainingSec?: number;
         } = { active: false };
-        try {
-          const cdKey = `${prefix}system:insufficient_cooldown`;
-          const cdVal = await redis.get(cdKey);
-          const cdTtl = await redis.ttl(cdKey);
-          if (cdVal) {
-            const parsed = JSON.parse(cdVal);
-            insufficientCooldown = {
-              active: Boolean(parsed.active),
-              reason: parsed.reason,
-              expiresAt: parsed.expiresAt,
-              remainingSec: cdTtl > 0 ? cdTtl : undefined,
-            };
+        if (redisConnected) {
+          try {
+            const cdKey = `${prefix}system:insufficient_cooldown`;
+            const cdVal = await redis.get(cdKey);
+            const cdTtl = await redis.ttl(cdKey);
+            if (cdVal) {
+              const parsed = JSON.parse(cdVal);
+              insufficientCooldown = {
+                active: Boolean(parsed.active),
+                reason: parsed.reason,
+                expiresAt: parsed.expiresAt,
+                remainingSec: cdTtl > 0 ? cdTtl : undefined,
+              };
+            }
+          } catch {
+            // ignore error reading cooldown
           }
-        } catch {
-          // ignore error reading cooldown
         }
 
         return new Response(

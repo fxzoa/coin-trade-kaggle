@@ -119,8 +119,15 @@ export class DcaKvStore {
         logger.error(`[DcaKvStore/Redis] エラー:`, err);
       });
 
-      await this.client.ping();
-      logger.info(`[DcaKvStore] Redis データストア初期化完了: ${this.redisUrl} (Prefix: ${this.prefix})`);
+      try {
+        await Promise.race([
+          this.client.ping(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Redis ping timeout')), 1500)),
+        ]);
+        logger.info(`[DcaKvStore] Redis データストア初期化完了: ${this.redisUrl} (Prefix: ${this.prefix})`);
+      } catch (redisErr: unknown) {
+        logger.warn(`[DcaKvStore] Redis 初期接続失敗 (オフライン継続モードで起動):`, toError(redisErr));
+      }
     } catch (err: unknown) {
       const error = toError(err);
       logger.error(`[DcaKvStore] 初期化失敗:`, error);
@@ -130,7 +137,7 @@ export class DcaKvStore {
 
   async pingRedis(): Promise<boolean> {
     try {
-      if (!this.client) return false;
+      if (!this.client || this.client.status !== 'ready') return false;
       const res = await this.client.ping();
       return res === 'PONG';
     } catch {

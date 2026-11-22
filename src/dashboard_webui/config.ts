@@ -78,15 +78,6 @@ export function parseConfig(
       healthEndpoint: "/health",
       directPort: 8004,
     },
-    {
-      key: "close_trader",
-      name: "Close Trader",
-      category: "Trading",
-      description: "Hyperliquidポジション利確・成行決済 & 履歴",
-      targetUrl: env.URL_CLOSE_TRADER || "http://localhost:8013",
-      healthEndpoint: "/api/health",
-      directPort: 8013,
-    },
 
     // === 基盤用BOT ===
     {
@@ -97,15 +88,6 @@ export function parseConfig(
       targetUrl: env.URL_PRICE_SYNCER || "http://localhost:8005",
       healthEndpoint: "/api/status",
       directPort: 8005,
-    },
-    {
-      key: "volume_alert",
-      name: "Volume Change Monitor",
-      category: "Infrastructure",
-      description: "1H/2H出来高急増 (6.18x) 監視・Slack通知 & WebUI",
-      targetUrl: env.URL_CANDLE_VOLUME_ALERT || "http://localhost:8009",
-      healthEndpoint: "/api/health",
-      directPort: 8009,
     },
     {
       key: "slack_alert",
