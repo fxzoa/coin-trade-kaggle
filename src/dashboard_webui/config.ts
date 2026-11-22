@@ -81,13 +81,13 @@ export function parseConfig(
 
     // === 基盤用BOT ===
     {
-      key: "syncer",
-      name: "Price Change Monitor",
+      key: "top20",
+      name: "Top20 Coin Tracker",
       category: "Infrastructure",
-      description: "リアルタイム価格同期 & Redis配信基盤",
-      targetUrl: env.URL_PRICE_SYNCER || "http://localhost:8005",
-      healthEndpoint: "/api/status",
-      directPort: 8005,
+      description: "Hyperliquid Top20 銘柄ランキング・時系列トラッカー",
+      targetUrl: env.URL_TOP20_WEBUI || "http://localhost:8003",
+      healthEndpoint: "/health",
+      directPort: 8003,
     },
     {
       key: "slack_alert",
