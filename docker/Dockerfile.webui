@@ -1,0 +1,22 @@
+FROM denoland/deno:alpine-2.9.5
+
+WORKDIR /app
+
+ENV DENO_DIR=/app/.cache/deno
+ENV PORT=8003
+ENV DB_PATH=/app/data/tracker.db
+
+# 依存関係キャッシュの最適化
+COPY deno.json ./
+COPY src/ ./src/
+
+# 事前キャッシュとデータディレクトリ権限付与
+RUN mkdir -p /app/data /app/.cache/deno && \
+    deno cache --allow-import src/top20_webui/main.ts && \
+    chown -R deno:deno /app
+
+USER deno
+
+EXPOSE 8003
+
+CMD ["run", "--unstable-kv", "--allow-net", "--allow-read", "--allow-write", "--allow-env", "src/top20_webui/main.ts"]

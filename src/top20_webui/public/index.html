@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crypto TOP 20 Volume Tracker | 時価総額TOP20 過去24H取引量トラッカー</title>
+  <meta name="description" content="暗号資産時価総額TOP20銘柄の過去24時間取引量合計（USD）および1時間ごとの推移を可視化するDeno KVダッシュボード">
+  <meta name="theme-color" content="#0b0e14">
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="header-branding">
+        <div class="brand-icon" aria-hidden="true">📊</div>
+        <div class="title-group">
+          <h1 class="app-title">Crypto TOP 20 Volume Tracker</h1>
+          <span class="header-divider" aria-hidden="true">|</span>
+          <p class="app-subtitle">時価総額 TOP20 通貨の過去24H取引量合計(USD) 1時間ごと推移トラッカー (Deno KV)</p>
+        </div>
+      </div>
+
+      <!-- Controls & Actions -->
+      <div class="header-controls">
+        <!-- Timeframe selector -->
+        <div class="timeframe-selector" role="group" aria-label="Timeframe selection">
+          <button type="button" class="btn-timeframe active" data-timeframe="24h">24 Hours</button>
+          <button type="button" class="btn-timeframe" data-timeframe="30d">30 Days</button>
+          <button type="button" class="btn-timeframe" data-timeframe="all">All Data</button>
+        </div>
+
+        <!-- Last updated time -->
+        <div class="action-buttons">
+          <span id="lastUpdatedTime" class="last-updated-time">更新: --:--:--</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Stat Cards Overview -->
+    <section class="stats-grid" aria-label="Key Statistics">
+      <!-- Card 1: Latest 24h Total Volume -->
+      <article class="stat-card" id="cardTotalVolume">
+        <div class="card-header">
+          <span class="card-icon">💰</span>
+          <span class="card-title">最新 TOP20 過去24H取引量合計</span>
+        </div>
+        <div class="card-value-group">
+          <span class="card-value" id="statTotalVolume">--</span>
+          <span class="card-change" id="statTotalVolumeChange">--</span>
+        </div>
+        <div class="card-footer">
+          <span class="card-caption">時価総額TOP20通貨の総計 24時間取引高 (USD)</span>
+        </div>
+      </article>
+
+      <!-- Card 2: Latest 24h Average Volume -->
+      <article class="stat-card" id="cardAvgVolume">
+        <div class="card-header">
+          <span class="card-icon">📊</span>
+          <span class="card-title">最新 TOP20 過去24H平均取引量</span>
+        </div>
+        <div class="card-value-group">
+          <span class="card-value" id="statAvgVolume">--</span>
+          <span class="card-change" id="statAvgVolumeChange">--</span>
+        </div>
+        <div class="card-footer">
+          <span class="card-caption">TOP20通貨の1銘柄あたり24時間取引量 (USD)</span>
+        </div>
+      </article>
+
+      <!-- Card 3: Price Momentum (Gainers vs Losers) -->
+      <article class="stat-card" id="cardMomentum">
+        <div class="card-header">
+          <span class="card-icon">⚡</span>
+          <span class="card-title">1時間 価格騰落数</span>
+        </div>
+        <div class="card-value-group momentum-group">
+          <div class="momentum-badge gainer">
+            <span class="dot gainer"></span>
+            <span class="label">上昇:</span>
+            <span class="count" id="statGainers">--</span>
+          </div>
+          <div class="momentum-badge loser">
+            <span class="dot loser"></span>
+            <span class="label">下落:</span>
+            <span class="count" id="statLosers">--</span>
+          </div>
+        </div>
+        <!-- Ratio progress bar -->
+        <div class="momentum-bar-container">
+          <div class="momentum-bar-fill" id="statMomentumBar" style="width: 50%;"></div>
+        </div>
+        <div class="card-footer">
+          <span class="card-caption" id="statMomentumCaption">TOP20通貨の上昇・下落比率</span>
+        </div>
+      </article>
+
+      <!-- Card 4: Last Updated Time -->
+      <article class="stat-card" id="cardLastUpdated">
+        <div class="card-header">
+          <span class="card-icon">🕒</span>
+          <span class="card-title">最終更新日時 (JST)</span>
+        </div>
+        <div class="card-value-group">
+          <span class="card-value time-value" id="statLastUpdated">--</span>
+        </div>
+        <div class="card-footer">
+          <span class="card-caption" id="statTimeAgo">データ待機中...</span>
+        </div>
+      </article>
+    </section>
+
+    <!-- Main Chart Section: TOP20 24h Volume Hourly Chart -->
+    <main class="chart-section" aria-label="Hourly Volume Chart">
+      <div class="chart-header">
+        <div class="chart-title-wrap">
+          <h2 class="chart-title">時価総額TOP20 通貨 過去24H取引量合計 推移チャート</h2>
+          <span class="chart-tag" id="chartTimeframeTag">1時間ごと記録 (24 Hours)</span>
+        </div>
+        <div class="chart-legend-indicator">
+          <div class="legend-item">
+            <span class="legend-line"></span>
+            <span class="legend-label">TOP20 24H取引量合計</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-line legend-line-avg"></span>
+            <span class="legend-label legend-label-avg">TOP20 期間平均</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart Canvas Container -->
+      <div class="chart-container" id="chartContainer">
+        <canvas id="volumeChart"></canvas>
+
+        <!-- Loading State Overlay -->
+        <div class="overlay-state loading-overlay" id="loadingOverlay">
+          <div class="spinner"></div>
+          <p class="overlay-text">データを読み込み中...</p>
+        </div>
+
+        <!-- Error State Overlay -->
+        <div class="overlay-state error-overlay" id="errorOverlay" style="display: none;">
+          <div class="error-icon">⚠️</div>
+          <p class="overlay-text error-msg" id="errorMessage">データ取得に失敗しました</p>
+          <button type="button" class="btn-retry" id="retryBtn">再試行</button>
+        </div>
+
+        <!-- Empty State Overlay -->
+        <div class="overlay-state empty-overlay" id="emptyOverlay" style="display: none;">
+          <div class="empty-icon">📭</div>
+          <p class="overlay-text">表示可能なKVデータがまだありません。<br>次回の1時間集計までお待ちください。</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="footer-status">
+        <span class="status-indicator online" id="connectionStatusIndicator"></span>
+        <span id="connectionStatusText">Deno KV 接続中</span>
+      </div>
+      <div class="footer-info">
+        <span>タイムゾーン: Asia/Tokyo (JST)</span>
+        <span class="divider">|</span>
+        <span>Storage: Deno KV</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>

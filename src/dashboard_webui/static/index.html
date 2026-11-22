@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html class="dark" lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>HL Bots Unified Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "obsidian": "#0B0F17",
+              "surface-1": "#131926",
+              "surface-2": "#1A2234",
+              "border-base": "#1E293B",
+              "border-elevated": "#334155",
+              "telemetry": "#38BDF8",
+              "emerald-ok": "#10B981",
+              "crimson-err": "#F43F5E",
+              "amber-warn": "#F59E0B",
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              mono: ["JetBrains Mono", "monospace"],
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="bg-obsidian text-slate-100 font-sans antialiased selection:bg-telemetry/30 selection:text-telemetry">
+    <div class="flex h-screen w-screen overflow-hidden">
+      <!-- サイドバー -->
+      <aside class="w-[260px] shrink-0 h-screen border-r border-border-base bg-[#0E131F] flex flex-col justify-between select-none">
+        <div class="flex flex-col min-h-0 flex-1">
+          <!-- ブランドヘッダー -->
+          <div class="h-16 px-4 border-b border-border-base flex items-center gap-3 shrink-0">
+            <div class="w-8 h-8 rounded bg-telemetry/10 border border-telemetry/30 flex items-center justify-center text-telemetry shadow-[0_0_12px_-2px_rgba(56,189,248,0.3)]">
+              <span class="material-symbols-outlined text-[20px]">bolt</span>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-sm font-bold tracking-tight text-white leading-tight">HL Bots</span>
+              <span class="text-[10px] font-mono uppercase tracking-widest text-telemetry">Unified Dashboard</span>
+            </div>
+          </div>
+
+          <!-- ナビゲーション -->
+          <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+            <div>
+              <div class="px-2 mb-1.5 text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-500">
+                Overview
+              </div>
+              <button
+                class="nav-item active w-full flex items-center justify-between px-3 py-2 rounded text-xs font-medium transition-colors"
+                data-view="summary"
+              >
+                <span class="flex items-center gap-2.5">
+                  <span class="material-symbols-outlined text-[18px]">dashboard</span>
+                  <span>Overall Summary</span>
+                </span>
+              </button>
+            </div>
+
+            <div>
+              <div class="px-2 mb-1.5 flex items-center justify-between text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-500">
+                <span>Trading Bots</span>
+                <span id="nav-count-trading" class="text-slate-600">0</span>
+              </div>
+              <div id="bot-nav-trading" class="space-y-0.5">
+                <!-- JSで自動生成 -->
+              </div>
+            </div>
+
+            <div>
+              <div class="px-2 mb-1.5 flex items-center justify-between text-[10px] font-mono font-semibold uppercase tracking-wider text-slate-500">
+                <span>Infrastructure</span>
+                <span id="nav-count-infra" class="text-slate-600">0</span>
+              </div>
+              <div id="bot-nav-infra" class="space-y-0.5">
+                <!-- JSで自動生成 -->
+              </div>
+            </div>
+          </nav>
+        </div>
+
+        <!-- サイドバーフッター -->
+        <div class="p-3 border-t border-border-base bg-[#0B0F17]/60 flex items-center justify-between gap-2 shrink-0">
+          <div class="flex items-center gap-2 px-2 py-1 rounded bg-surface-1 border border-border-base">
+            <span class="w-1.5 h-1.5 rounded-full bg-telemetry animate-pulse"></span>
+            <span id="system-time" class="font-mono text-xs text-slate-300 tabular-nums">--:--:--</span>
+          </div>
+          <button
+            id="btn-refresh"
+            class="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-surface-1 hover:bg-surface-2 border border-border-base hover:border-border-elevated text-xs font-medium text-slate-200 transition-colors cursor-pointer"
+            title="手動更新"
+          >
+            <span class="material-symbols-outlined text-[15px]">refresh</span>
+            <span>更新</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- メインコンテンツ -->
+      <main class="flex-1 flex flex-col min-w-0 h-screen bg-obsidian">
+        <!-- トップバー -->
+        <header class="h-16 shrink-0 border-b border-border-base bg-[#0F1422]/80 backdrop-blur-md px-6 flex items-center justify-between gap-4 z-20">
+          <div class="flex items-baseline gap-3 min-w-0">
+            <h1 id="view-title" class="text-lg font-bold text-white tracking-tight truncate">
+              Overall System Summary
+            </h1>
+            <p id="view-desc" class="text-xs text-slate-400 truncate hidden md:inline-block">
+              全取引ボットの健全性・稼働メトリクス一括監視
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2.5 shrink-0">
+            <!-- 全体異常バッジ -->
+            <div
+              id="overall-status-badge"
+              style="display: none;"
+              class="items-center gap-1.5 px-2.5 py-1 rounded-full bg-crimson-err/10 border border-crimson-err/30 text-crimson-err text-xs font-mono font-medium"
+            >
+              <span class="w-1.5 h-1.5 rounded-full bg-crimson-err animate-pulse"></span>
+              <span class="status-text">Offline</span>
+            </div>
+
+            <!-- 残高不足アラート表示 (アクティブ時のみ表示) -->
+            <div
+              id="dashboard-insufficient-badge"
+              style="display: none;"
+              class="items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-warn/10 border border-amber-warn/30 text-amber-warn text-xs font-mono font-medium"
+            >
+              <span class="material-symbols-outlined text-[14px]">warning</span>
+              <span class="badge-insufficient-label">残高不足</span>
+              <span id="dashboard-insufficient-time" class="badge-insufficient-time"></span>
+            </div>
+
+            <!-- Redis ヘルスチェックバッジ -->
+            <div
+              id="redis-status-badge"
+              class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-1 border border-border-base text-xs font-mono font-medium text-slate-300"
+            >
+              <span id="redis-indicator" class="w-2 h-2 rounded-full bg-emerald-ok shadow-[0_0_8px_#10b981]"></span>
+              <span id="redis-status-text">Redis</span>
+            </div>
+
+            <!-- 外部ウィンドウボタン -->
+            <button
+              id="btn-open-external"
+              class="hidden items-center gap-1.5 px-3 py-1.5 rounded bg-surface-1 hover:bg-surface-2 border border-border-base hover:border-border-elevated text-xs font-medium text-slate-200 transition-colors cursor-pointer"
+              title="別タブで開く"
+            >
+              <span class="material-symbols-outlined text-[15px]">open_in_new</span>
+              <span>外部ウィンドウ</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- ビューコンテナ -->
+        <div class="flex-1 overflow-y-auto p-6 relative">
+          <!-- 1. 全体サマリービュー -->
+          <div id="summary-view" class="view-panel active space-y-6 max-w-[1600px] mx-auto">
+            <!-- KPI メトリクスグリッド -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="bg-surface-1 border border-border-base rounded p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+                <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span>総ボット数</span>
+                  <span class="material-symbols-outlined text-[16px] text-slate-500">dns</span>
+                </div>
+                <div id="val-total-bots" class="font-mono text-2xl font-semibold text-white tabular-nums">-</div>
+              </div>
+
+              <div class="bg-surface-1 border border-border-base rounded p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+                <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span>正常稼働中</span>
+                  <span class="material-symbols-outlined text-[16px] text-emerald-ok">check_circle</span>
+                </div>
+                <div id="val-healthy-bots" class="font-mono text-2xl font-semibold text-emerald-ok tabular-nums">-</div>
+              </div>
+
+              <div class="bg-surface-1 border border-border-base rounded p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+                <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span>異常 / 停止中</span>
+                  <span class="material-symbols-outlined text-[16px] text-crimson-err">error</span>
+                </div>
+                <div id="val-unhealthy-bots" class="font-mono text-2xl font-semibold text-crimson-err tabular-nums">-</div>
+              </div>
+
+              <div class="bg-surface-1 border border-border-base rounded p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+                <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span>最終チェック</span>
+                  <span class="material-symbols-outlined text-[16px] text-telemetry">schedule</span>
+                </div>
+                <div id="val-last-checked" class="font-mono text-xl font-semibold text-telemetry tabular-nums">--:--</div>
+              </div>
+            </div>
+
+            <!-- セクションヘッダー & フィルタ -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+              <h2 class="text-sm font-semibold text-slate-200 tracking-tight flex items-center gap-2">
+                <span class="w-1 h-4 bg-telemetry rounded-full"></span>
+                <span>ボット一覧 & クイックアクセス</span>
+              </h2>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="flex items-center bg-surface-1 border border-border-base rounded p-0.5 text-xs font-mono">
+                  <button class="filter-chip active px-2.5 py-1 rounded transition-colors cursor-pointer" data-filter="all">All</button>
+                  <button class="filter-chip px-2.5 py-1 rounded transition-colors cursor-pointer" data-filter="trading">Trading</button>
+                  <button class="filter-chip px-2.5 py-1 rounded transition-colors cursor-pointer" data-filter="infra">Infra</button>
+                  <button class="filter-chip px-2.5 py-1 rounded transition-colors cursor-pointer" data-filter="alerts">Alerts</button>
+                </div>
+                <div class="relative">
+                  <span class="material-symbols-outlined text-[15px] text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">search</span>
+                  <input
+                    id="bot-search"
+                    type="text"
+                    placeholder="Filter bots..."
+                    class="pl-8 pr-3 py-1 bg-surface-1 border border-border-base focus:border-telemetry focus:ring-0 rounded text-xs font-mono text-slate-200 placeholder-slate-500 w-44"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- ボットカードグリッド -->
+            <div id="bot-cards-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <!-- JSでカードを描画 -->
+            </div>
+          </div>
+
+          <!-- 2. ボットWebUI埋め込みビュー (iframe) -->
+          <div id="bot-embed-view" class="view-panel hidden absolute inset-0 bg-obsidian">
+            <div id="embed-loader" class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-obsidian/90 z-10">
+              <div class="spinner"></div>
+              <span class="text-xs font-mono text-slate-400">Loading Bot WebUI...</span>
+            </div>
+            <iframe id="bot-frame" class="w-full h-full border-0" src="about:blank"></iframe>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

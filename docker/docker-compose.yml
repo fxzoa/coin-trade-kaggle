@@ -1,0 +1,223 @@
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    image: nanbingjun/top20-tracker-worker:latest
+    container_name: top20-tracker-worker
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/top20_worker/.env
+    environment:
+      - DB_PATH=/app/data/tracker.db
+
+  webui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.webui
+    image: nanbingjun/top20-tracker-webui:latest
+    container_name: top20-tracker-webui
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/top20_webui/.env
+    environment:
+      - PORT=8003
+      - DB_PATH=/app/data/tracker.db
+    depends_on:
+      - worker
+    healthcheck:
+      test: ["CMD-SHELL", "deno eval \"const res = await fetch('http://localhost:8003/health'); if (!res.ok) Deno.exit(1);\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  price-monitor:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.price-monitor
+    image: nanbingjun/price-change-monitor:latest
+    container_name: price-change-monitor
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/price_monitor/.env
+
+  price-monitor-webui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.price-monitor-webui
+    image: nanbingjun/price-change-monitor-webui:latest
+    container_name: price-change-monitor-webui
+    restart: unless-stopped
+    ports:
+      - "8005:8005"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/price_monitor_webui/.env
+    environment:
+      - PORT=8005
+    depends_on:
+      - price-monitor
+    healthcheck:
+      test: ["CMD-SHELL", "deno eval \"const res = await fetch('http://localhost:8005/api/health'); if (!res.ok) Deno.exit(1);\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  dashboard-webui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard-webui
+    image: nanbingjun/hl-dashboard-webui:latest
+    container_name: hl-dashboard-webui
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./conf/dashboard_webui/.env
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
+      - URL_PRICE_SYNCER=http://price-monitor-webui:8005
+    depends_on:
+      - price-monitor-webui
+
+  btc-dca-bot:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.btc-dca-bot
+    container_name: btc-dca-bot
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/btc_dca_bot/.env
+
+  btc-dca-webui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.btc-dca-webui
+    container_name: btc-dca-webui
+    restart: unless-stopped
+    ports:
+      - "8007:8007"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/btc_dca_webui/.env
+    environment:
+      - PORT=8007
+
+  btc-grid-bot:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.btc-grid-bot
+    container_name: btc-grid-bot
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/btc_grid_bot/.env
+
+  btc-grid-webui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.btc-grid-webui
+    container_name: btc-grid-webui
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/btc_grid_webui/.env
+    environment:
+      - PORT=8000
+
+  surge-dip-bot:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.surge-dip-bot
+    container_name: surge-dip-bot
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/surge_dip_bot/.env
+
+  surge-dip-webui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.surge-dip-webui
+    container_name: surge-dip-webui
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/surge_dip_webui/.env
+    environment:
+      - PORT=8004
+
+  slack-alert-sender:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.slack-alert-sender
+    container_name: slack-alert-sender
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/slack_alert_sender/.env
+
+  slack-alert-webui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.slack-alert-webui
+    container_name: slack-alert-webui
+    restart: unless-stopped
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/slack_alert_webui/.env
+    environment:
+      - PORT=8010
+
+  multi-dca-bot:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.multi-dca-bot
+    container_name: multi-dca-bot
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/multi_dca_bot/.env
+
+  multi-dca-webui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.multi-dca-webui
+    container_name: multi-dca-webui
+    restart: unless-stopped
+    ports:
+      - "8008:8008"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./conf/multi_dca_webui/.env
+    environment:
+      - PORT=8008

@@ -1,0 +1,22 @@
+FROM denoland/deno:alpine-2.9.5
+
+WORKDIR /app
+
+ENV DENO_DIR=/app/.cache/deno
+ENV PORT=8080
+ENV HOST=0.0.0.0
+
+# 依存関係キャッシュの最適化
+COPY deno.json ./
+COPY src/ ./src/
+
+# 事前キャッシュと権限付与
+RUN mkdir -p /app/.cache/deno && \
+    deno cache --allow-import src/dashboard_webui/server.ts && \
+    chown -R deno:deno /app
+
+USER deno
+
+EXPOSE 8080
+
+CMD ["run", "--allow-net", "--allow-env", "--allow-read", "src/dashboard_webui/server.ts"]

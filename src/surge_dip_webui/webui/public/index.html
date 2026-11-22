@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Surge DIP Trader | Hyperliquid DEX</title>
+    <meta name="description"
+      content="Hyperliquid DEX の期間別 MIN/MAX と騰落シグナルを表示する取引ダッシュボード">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#0B0F17">
+
+    <!-- Google Fonts: Inter, JetBrains Mono & Material Symbols Outlined -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet">
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "obsidian": "#0B0F17",
+              "surface-1": "#131926",
+              "surface-2": "#1A2234",
+              "border-base": "#1E293B",
+              "border-elevated": "#334155",
+              "telemetry": "#38BDF8",
+              "emerald-ok": "#10B981",
+              "crimson-err": "#F43F5E",
+              "amber-warn": "#F59E0B",
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              mono: ["JetBrains Mono", "monospace"],
+            },
+          },
+        },
+      };
+    </script>
+    <!-- Alpine.js CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js"></script>
+  </head>
+  <body class="min-h-screen bg-obsidian text-slate-100 font-sans antialiased selection:bg-telemetry/30 selection:text-telemetry flex flex-col p-1"
+    x-data="priceMonitor">
+    <!-- Main Container (Matching BTC Grid Bot / Full width, 4px gap) -->
+    <div
+      class="w-full max-w-full mx-auto flex flex-col flex-1 space-y-[4px]">
+      <!-- Top Navigation Header (Compact) -->
+      <header
+        class="w-full bg-[#0F1422]/90 backdrop-blur-md border border-border-base rounded-lg px-2.5 py-1.5 sm:px-4 flex flex-wrap items-center justify-between gap-2 shadow-lg shadow-black/40">
+        <!-- Title & Branding -->
+        <div class="flex items-center space-x-2">
+          <div
+            class="w-6 h-6 rounded bg-telemetry/10 border border-telemetry/30 flex items-center justify-center text-telemetry shadow-[0_0_12px_-2px_rgba(56,189,248,0.3)]">
+            <span class="material-symbols-outlined text-[16px]">bolt</span>
+          </div>
+          <div class="flex items-center space-x-1.5 flex-wrap">
+            <h1
+              class="text-sm font-black tracking-tight text-white leading-tight">
+              Surge DIP Trader
+            </h1>
+
+            <!-- タブ切り替えボタン -->
+            <div
+              class="flex items-center space-x-1 ml-2 bg-[#131926] border border-[#1E293B] p-0.5 rounded-lg">
+              <button
+                type="button"
+                @click="currentTab = 'signals'"
+                class="px-2 py-0.5 rounded text-[11px] font-bold transition-colors cursor-pointer"
+                :class="currentTab === 'signals' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'"
+              >
+                ⚡ シグナル監視
+              </button>
+              <button
+                type="button"
+                @click="currentTab = 'price-change'; if(priceChangeItems.length === 0) fetchPriceChange()"
+                class="px-2 py-0.5 rounded text-[11px] font-bold transition-colors cursor-pointer"
+                :class="currentTab === 'price-change' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'"
+              >
+                📈 騰落率一覧
+              </button>
+              <button
+                type="button"
+                @click="currentTab = 'volume-ranking'; if(volumeRankingItems.length === 0) fetchVolumeRanking()"
+                class="px-2 py-0.5 rounded text-[11px] font-bold transition-colors cursor-pointer"
+                :class="currentTab === 'volume-ranking' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'"
+              >
+                📊 出来高
+              </button>
+              <button
+                type="button"
+                @click="currentTab = 'errors'; fetchErrors()"
+                class="px-2 py-0.5 rounded text-[11px] font-bold transition-colors cursor-pointer flex items-center gap-1"
+                :class="currentTab === 'errors' ? 'bg-rose-600 text-white shadow-sm' : 'text-rose-400 hover:text-rose-300'"
+              >
+                <span>🚨 エラーログ</span>
+                <span class="px-1 py-0.2 bg-black/40 rounded text-[9px]"
+                  x-text="errorLogs.length"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Header Controls: Status, Auto-refresh toggle, Refresh Button -->
+        <div class="flex items-center flex-wrap gap-2 text-xs">
+          <!-- Trade Mode Controls (Selectbox) -->
+          <div
+            class="flex items-center bg-[#131926] border border-[#1E293B] px-2 py-0.5 rounded-lg text-xs font-mono">
+            <label for="tradeModeSelect"
+              class="text-slate-400 text-[11px] font-bold mr-1.5">MODE:</label>
+            <select
+              id="tradeModeSelect"
+              x-model="tradeMode"
+              @change="setTradeMode($event.target.value)"
+              :disabled="isUpdatingMode"
+              class="bg-[#0E131F] border border-[#1E293B] text-white rounded px-2 py-0.5 text-[11px] font-semibold focus:outline-none focus:border-cyan-500 cursor-pointer"
+              :class="{
+                'text-cyan-400': tradeMode === 'BOTH',
+                'text-emerald-400': tradeMode === 'BUY_ONLY',
+                'text-rose-400': tradeMode === 'SELL_ONLY',
+                'text-slate-400': tradeMode === 'DISABLED'
+              }"
+            >
+              <option value="BOTH">BOTH</option>
+              <option value="BUY_ONLY">BUY ONLY</option>
+              <option value="SELL_ONLY">SELL ONLY</option>
+              <option value="DISABLED">STOP</option>
+            </select>
+          </div>
+
+          <!-- BOT トグルスイッチ (BOT文字のみ表示・LIVE前) -->
+          <button
+            @click="toggleBot()"
+            class="text-[10px] px-2 py-0.5 rounded-lg font-bold cursor-pointer border flex items-center gap-1.5 transition-colors shadow-sm"
+            :class="botEnabled ? 'bg-emerald-950/80 border-emerald-600 text-emerald-400 hover:bg-emerald-900' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'"
+            :title="botEnabled ? 'BOT稼働中 (クリックで停止)' : 'BOT停止中 (クリックで起動)'"
+          >
+            <span class="w-1.5 h-1.5 rounded-full"
+              :class="botEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'"></span>
+            <span>BOT</span>
+          </button>
+
+          <!-- LIVE status pill -->
+          <div
+            class="flex items-center space-x-1.5 bg-[#131926] border border-[#1E293B] px-2.5 py-0.5 rounded-lg text-xs font-medium shadow-sm"
+            :title="'リアルタイム接続: ' + (sseConnected ? 'LIVE接続中' : '切断 (再接続試行中)')">
+            <span class="w-1.5 h-1.5 rounded-full"
+              :class="sseConnected ? 'bg-cyan-400 shadow-[0_0_6px_#22d3ee] animate-pulse' : 'bg-rose-500'"></span>
+            <span
+              :class="sseConnected ? 'text-cyan-400 font-mono font-semibold text-[11px]' : 'text-rose-400 font-mono text-[11px]'"
+              x-text="sseConnected ? 'LIVE' : 'OFF'">LIVE</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Error Banner if any -->
+      <div x-show="errorMessage" x-cloak
+        class="w-full bg-rose-950/70 border border-rose-800 text-rose-200 px-4 py-3 rounded-xl text-xs sm:text-sm flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <span>⚠️</span>
+          <span x-text="errorMessage"></span>
+        </div>
+        <button @click="errorMessage = ''"
+          class="text-rose-400 hover:text-white font-bold">&times;</button>
+      </div>
+
+      <!-- Stat Cards Grid (4 cards) -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-2 gap-y-[2px]"
+        aria-label="Database & System KPI Overview">
+        <!-- Card 1: 監視銘柄数 -->
+        <div class="stat-card stat-card-cyan">
+          <div
+            class="flex items-center justify-between text-[11px] text-[#8c9cb6] font-medium leading-tight">
+            <span>監視銘柄数</span>
+            <span
+              class="font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-1 py-0 rounded text-[9px] leading-tight">ALL PERPS</span>
+          </div>
+          <div class="flex items-baseline space-x-1.5 leading-tight">
+            <span
+              class="text-sm sm:text-base font-black font-mono tracking-tight text-white leading-tight"
+              x-text="formatNumber(status?.db?.uniqueSymbols || totalSymbols || 0)">0</span>
+            <span class="text-[9px] text-[#8c9cb6] font-semibold leading-tight">銘柄</span>
+          </div>
+          <div
+            class="text-[9px] text-[#54647f] flex items-center justify-between leading-tight pt-0.5 border-t border-white/5">
+            <span>永久先物市場</span>
+            <span class="text-cyan-400 font-mono font-medium">4H 周期足</span>
+          </div>
+        </div>
+
+        <!-- Card 2: 期間別 MIN/MAX 状況 -->
+        <div class="stat-card stat-card-green">
+          <div
+            class="flex items-center justify-between text-[11px] text-[#8c9cb6] font-medium leading-tight">
+            <span>期間別 MIN/MAX</span>
+            <span
+              class="font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-1 py-0 rounded text-[9px] leading-tight">Redis</span>
+          </div>
+          <div class="flex items-baseline space-x-1.5 leading-tight">
+            <span
+              class="text-sm sm:text-base font-black font-mono tracking-tight text-emerald-400 leading-tight"
+              x-text="formatNumber(status?.db?.rangeCount || 0)">0</span>
+            <span class="text-[9px] text-[#8c9cb6] font-semibold leading-tight">期間データ</span>
+          </div>
+          <div
+            class="text-[9px] text-[#54647f] flex items-center justify-between leading-tight pt-0.5 border-t border-white/5">
+            <span>保存先</span>
+            <span class="text-emerald-300 font-mono font-medium"
+              x-text="status?.db?.fileSizeFormatted || 'Redis'">Redis</span>
+          </div>
+        </div>
+
+        <!-- Card 3: MIN/MAX 更新時刻 -->
+        <div class="stat-card stat-card-purple">
+          <div
+            class="flex items-center justify-between text-[11px] text-[#8c9cb6] font-medium leading-tight">
+            <span>MIN/MAX 最終更新 (JST)</span>
+            <span
+              class="font-mono text-purple-400 bg-purple-950/60 border border-purple-800/60 px-1 py-0 rounded text-[9px] leading-tight">Redis</span>
+          </div>
+          <div class="flex items-baseline leading-tight">
+            <span
+              class="text-[11px] sm:text-xs font-bold font-mono text-white tracking-tight leading-tight"
+              x-text="status?.db?.latestUpdateJst || '--'">--</span>
+          </div>
+          <div
+            class="text-[9px] text-[#54647f] flex items-center justify-between leading-tight pt-0.5 border-t border-white/5">
+            <span>基準 (Ref)</span>
+            <span class="text-purple-300 font-mono font-medium"
+              x-text="refTimeJst || status?.serverTimeJst || '--'">--</span>
+          </div>
+        </div>
+
+        <!-- Card 4: ネットワーク / 稼働状態 -->
+        <div class="stat-card stat-card-amber">
+          <div
+            class="flex items-center justify-between text-[11px] text-[#8c9cb6] font-medium leading-tight">
+            <span>稼働状態</span>
+            <span
+              class="font-mono text-amber-400 bg-amber-950/60 border border-amber-800/60 px-1 py-0 rounded text-[9px] leading-tight">STATUS</span>
+          </div>
+          <div class="flex items-center space-x-1.5 leading-tight">
+            <span
+              class="text-[11px] sm:text-xs font-bold font-mono text-white leading-tight">Mainnet</span>
+            <span
+              class="text-[9px] px-1 py-0 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/70 font-mono leading-tight">WS Active</span>
+          </div>
+          <div
+            class="text-[9px] text-[#54647f] flex items-center justify-between leading-tight pt-0.5 border-t border-white/5">
+            <span>CB制御</span>
+            <span class="text-emerald-400 font-mono font-medium"
+              x-text="status?.network?.circuitBreakers || 'Normal'">Normal</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Range Monitor Section -->
+      <section x-show="currentTab === 'signals'" class="space-y-[4px] flex-1 flex flex-col"
+        aria-label="Multi-Period Price Range Monitor">
+        <!-- ====================================================================
+             SHORT 一覧 / BUY 一覧 (SIG タブ準拠。基準達成銘柄のみを表示)
+             ==================================================================== -->
+        <template x-for="tbl in signalTables" :key="tbl.id">
+          <section class="space-y-1">
+            <!-- キャプション部 (Multi DCA Bot スタイル: 外側に独立配置) -->
+            <div class="flex items-center justify-between">
+              <h2 class="text-xs sm:text-sm font-bold text-slate-300 flex items-center space-x-2">
+                <span class="w-2 h-2 rounded-full" :class="tbl.dotClass"></span>
+                <span x-text="tbl.title"></span>
+                <span
+                  class="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold leading-none"
+                  :class="tbl.badgeClass" x-text="`${tbl.rows.length} 銘柄`"></span>
+              </h2>
+              <span class="text-[10px] text-slate-500 font-mono" x-text="tbl.note"></span>
+            </div>
+
+            <!-- テーブルカードコンテナ -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+              <div class="overflow-auto max-h-[calc(50vh-120px)] min-h-[160px]">
+                <table class="w-full text-left text-xs whitespace-nowrap">
+                  <thead
+                    class="sticky top-0 z-10 bg-slate-950 text-slate-400 font-semibold border-b border-slate-800 select-none">
+                    <tr>
+                      <th class="px-2 py-1 w-8 text-center text-[11px]">#</th>
+                      <th class="px-2.5 py-1 w-20 text-[11px]">通貨</th>
+                      <th class="px-2 py-1 text-left text-[11px]">現在値</th>
+                      <template x-for="p in getPeriodDefinitions()" :key="p.key">
+                        <th class="px-2 py-1 w-20 text-center text-[11px]" :title="p.label">
+                          <span x-text="p.short"></span>
+                          <span class="block text-[8px] font-normal leading-tight"
+                            :class="tbl.thresholdClass"
+                            x-text="tbl.threshold(p)"></span>
+                        </th>
+                      </template>
+                      <th class="px-2 py-1 w-24 text-center text-[11px]">取引基準</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-800/60 font-mono text-xs">
+                    <!-- ロード中 -->
+                    <template x-if="isLoading">
+                      <tr>
+                        <td colspan="10" class="text-center py-4 text-slate-400">
+                          <div class="inline-flex items-center space-x-2">
+                            <div
+                              class="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-300"></div>
+                            <span class="text-xs">レンジ集計データをロード中...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
+
+                    <!-- 取得失敗 (「該当なし」と区別して表示する) -->
+                    <template x-if="!isLoading && loadFailed && ranges.length === 0">
+                      <tr>
+                        <td colspan="10"
+                          class="text-center py-4 text-rose-400 text-xs">レンジデータを取得できませんでした。再読み込みしてください。</td>
+                      </tr>
+                    </template>
+
+                    <!-- 該当なし -->
+                    <template x-if="!isLoading && !loadFailed && tbl.rows.length === 0">
+                      <tr>
+                        <td colspan="10"
+                          class="text-center py-4 text-slate-500 text-xs">基準達成銘柄はありません。</td>
+                      </tr>
+                    </template>
+
+                    <!-- データ行 -->
+                    <template x-for="(row, rowIdx) in tbl.rows" :key="row.symbol">
+                      <tr class="transition-colors" :class="tbl.rowClass">
+                        <!-- 項番 -->
+                        <td class="px-2 py-1 text-center text-slate-500 text-[11px]"
+                          x-text="rowIdx + 1"></td>
+
+                        <!-- 通貨 (状態ドット付き) -->
+                        <td class="px-2.5 py-1 font-bold align-middle">
+                          <div class="flex items-center space-x-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full" :class="tbl.dotClass"></span>
+                            <span class="text-slate-100 text-xs" x-text="row.symbol"></span>
+                          </div>
+                        </td>
+
+                        <!-- 現在値 -->
+                        <td class="px-2 py-1 text-left text-slate-300 text-xs"
+                          x-text="formatMarkPriceDisplay(row.latestClose)"></td>
+
+                        <!-- 期間別セル (主表示: 高値からの下落率 / 副表示: 安値~高値) -->
+                        <template x-for="cell in row.cells" :key="cell.key">
+                          <td class="px-2 py-1 text-center" :title="cell.tooltip">
+                            <span
+                              class="px-1.5 py-0.2 rounded text-[11px] font-bold inline-block leading-tight"
+                              :class="tbl.cellClass(cell)"
+                              x-text="tbl.cellText(cell)"
+                            ></span>
+                            <span class="block text-[8px] font-normal text-slate-500 leading-tight"
+                              x-text="cell.sub"></span>
+                          </td>
+                        </template>
+
+                        <!-- 取引基準 (BUY / SELL 達成数) -->
+                        <td class="px-2 py-1 text-center">
+                          <template x-if="row.buyCount > 0">
+                            <span
+                              class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-600 text-white inline-block leading-tight"
+                              x-text="`BUY達成 (${row.buyCount})`"></span>
+                          </template>
+                          <template x-if="row.sellCount > 0">
+                            <span
+                              class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-600 text-white inline-block leading-tight"
+                              x-text="`SELL達成 (${row.sellCount})`"></span>
+                          </template>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </template>
+
+        <!-- ====================================================================
+             Redis シグナル履歴テーブル (最新50件)
+             ==================================================================== -->
+        <section class="space-y-1 mt-1.5">
+          <!-- キャプション部 (Multi DCA Bot スタイル: 外側に独立配置) -->
+          <div class="flex items-center justify-between">
+            <h2 class="text-xs sm:text-sm font-bold text-slate-300 flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+              <span>シグナル履歴 (Redis hl:signals:list)</span>
+              <span
+                class="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-800 leading-none"
+                x-text="`${signals.length} 件`"></span>
+            </h2>
+            <button
+              type="button"
+              @click="fetchSignals()"
+              :disabled="isSignalsLoading"
+              class="text-[10px] text-cyan-400 hover:text-cyan-300 font-mono flex items-center space-x-1"
+            >
+              <span>再取得</span>
+            </button>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+            <div class="overflow-auto max-h-[200px]">
+              <table class="w-full text-left text-xs whitespace-nowrap">
+                <thead
+                  class="sticky top-0 z-10 bg-slate-950 text-slate-400 font-semibold border-b border-slate-800 select-none">
+                  <tr>
+                    <th class="px-2.5 py-1 w-28 text-[11px]">発生日時</th>
+                    <th class="px-2 py-1 w-16 text-[11px]">通貨</th>
+                    <th class="px-2 py-1 w-14 text-center text-[11px]">売買</th>
+                    <th class="px-2 py-1 w-20 text-[11px]">種別</th>
+                    <th class="px-2 py-1 text-right text-[11px]">判定価格</th>
+                    <th class="px-2 py-1 text-right text-[11px]">変動率 (%)</th>
+                    <th class="px-2 py-1 text-right text-[11px]">発注サイズ</th>
+                    <th class="px-2 py-1 w-14 text-center text-[11px]">状態</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60 font-mono text-xs">
+                  <template x-if="signals.length === 0">
+                    <tr>
+                      <td colspan="8" class="text-center py-4 text-slate-500 text-xs">
+                        直近のシグナル発生履歴はありません
+                      </td>
+                    </tr>
+                  </template>
+                  <template x-for="s in signals" :key="s.id">
+                    <tr class="hover:bg-slate-800/40 transition">
+                      <td class="px-2.5 py-1 text-slate-400 text-[11px]"
+                        x-text="s.createdAt ? s.createdAt.replace('T', ' ').substring(0, 19) : '--'"></td>
+                      <td class="px-2 py-1 font-bold text-white text-xs" x-text="s.symbol"></td>
+                      <td class="px-2 py-1 text-center text-xs">
+                        <span
+                          class="px-2 py-0.5 rounded text-[10px] font-bold"
+                          :class="s.side === 'LONG' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'"
+                          x-text="s.side === 'LONG' ? 'BUY' : 'SELL'"
+                        ></span>
+                      </td>
+                      <td class="px-3 py-1.5 text-slate-300 font-semibold"
+                        x-text="s.signalType"></td>
+                      <td class="px-3 py-1.5 text-right text-slate-200"
+                        x-text="formatMarkPriceDisplay(s.price)"></td>
+                      <td class="px-3 py-1.5 text-right"
+                        :class="s.side === 'LONG' ? 'text-emerald-400' : 'text-rose-400'"
+                        x-text="s.changePct !== null ? `${s.changePct.toFixed(2)}%` : '--'"></td>
+                      <td class="px-3 py-1.5 text-right text-cyan-300 font-semibold"
+                        x-text="`$${s.targetSize}`"></td>
+                      <td class="px-3 py-1.5 text-center">
+                        <span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300"
+                          x-text="s.status"></span>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ====================================================================
+           [タブ: 騰落率一覧 (Price Change) - dashboard-worker 互換]
+           ==================================================================== -->
+      <section x-show="currentTab === 'price-change'" x-cloak
+        class="space-y-1.5 flex-1 flex flex-col w-full"
+        aria-label="Price Change Tab">
+        <!-- 上部ツールバー -->
+        <div
+          class="bg-slate-900 border border-slate-800 rounded-xl py-1.5 px-3 shadow-sm flex flex-wrap items-center justify-between gap-1.5">
+          <!-- 概要ステータス -->
+          <div class="flex items-center space-x-2 shrink-0">
+            <div
+              class="w-6 h-6 rounded-md bg-emerald-600/20 text-emerald-400 flex items-center justify-center font-bold shrink-0">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+              </svg>
+            </div>
+            <h2 class="text-xs sm:text-sm font-bold text-slate-100 flex items-center space-x-2">
+              <span>騰落率一覧</span>
+              <span
+                class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                x-text="`${getFilteredPriceChangeItems().length} 銘柄`"></span>
+              <span class="text-[11px] font-normal text-slate-400 font-mono"
+                x-show="priceChangeTimestamp" x-text="`(${priceChangeTimestamp} 更新)`"></span>
+            </h2>
+          </div>
+
+          <!-- 検索バー & 閾値絞り込み & 手動再取得 -->
+          <div class="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+            <!-- 閾値超過銘柄絞り込みトグル -->
+            <label
+              x-show="getCurrentThreshold()"
+              class="flex items-center space-x-1.5 text-xs text-slate-300 cursor-pointer select-none bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors"
+              title="現在ソート中期間の急騰・急落判定閾値を超えた銘柄のみ表示します"
+            >
+              <input
+                type="checkbox"
+                x-model="priceChangeFilterThresholdOnly"
+                class="rounded bg-slate-900 border-slate-700 text-emerald-500 focus:ring-0 cursor-pointer w-3.5 h-3.5"
+              />
+              <span class="text-[11px] font-medium">閾値超過のみ</span>
+            </label>
+
+            <div class="relative flex-1 sm:w-52">
+              <input
+                type="text"
+                placeholder="銘柄検索 (例: BTC)..."
+                x-model="priceChangeSearchQuery"
+                class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              />
+              <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" fill="none"
+                stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+
+            <button
+              type="button"
+              @click="fetchPriceChange()"
+              :disabled="isPriceChangeLoading"
+              class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-lg text-xs font-medium shadow-sm transition-colors flex items-center space-x-1 shrink-0 disabled:opacity-50 cursor-pointer"
+              title="最新の騰落率データを再取得"
+            >
+              <svg :class="isPriceChangeLoading ? 'animate-spin' : ''" class="w-3.5 h-3.5"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span x-text="isPriceChangeLoading ? '読込中...' : '再取得'"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- エラー表示 -->
+        <div x-show="priceChangeError" x-cloak
+          class="p-3 bg-rose-950/80 border border-rose-800 rounded-xl text-rose-300 text-xs flex items-center space-x-2">
+          <svg class="w-4 h-4 shrink-0 text-rose-400" fill="none" stroke="currentColor"
+            viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span x-text="priceChangeError"></span>
+        </div>
+
+        <!-- 騰落率テーブルカード -->
+        <div
+          class="bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden flex-1 flex flex-col">
+          <div class="overflow-auto max-h-[calc(100vh-220px)] min-h-[300px]">
+            <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
+              <thead
+                class="sticky top-0 z-10 bg-slate-950/95 text-slate-400 font-semibold border-b border-slate-800 text-[11px] select-none">
+                <tr>
+                  <!-- 銘柄名 -->
+                  <th
+                    @click="setPriceChangeSort('coin')"
+                    class="px-4 py-2 cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex items-center space-x-1">
+                      <span>銘柄</span>
+                      <span x-show="priceChangeSortKey === 'coin'"
+                        x-text="priceChangeSortAsc ? '▲' : '▼'"
+                        class="text-[10px] text-emerald-400"></span>
+                    </div>
+                  </th>
+
+                  <!-- 現在価格 -->
+                  <th
+                    @click="setPriceChangeSort('markPrice')"
+                    class="px-4 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex items-center justify-end space-x-1">
+                      <span>現在価格</span>
+                      <span x-show="priceChangeSortKey === 'markPrice'"
+                        x-text="priceChangeSortAsc ? '▲' : '▼'"
+                        class="text-[10px] text-emerald-400"></span>
+                    </div>
+                  </th>
+
+                  <!-- 360D 変動率 -->
+                  <th
+                    @click="setPriceChangeSort('change360d')"
+                    class="px-3 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex flex-col items-end">
+                      <div class="flex items-center justify-end space-x-1">
+                        <span>360D変動率</span>
+                        <span x-show="priceChangeSortKey === 'change360d'"
+                          x-text="priceChangeSortAsc ? '▲' : '▼'"
+                          class="text-[10px] text-emerald-400"></span>
+                      </div>
+                      <span class="text-[9px] font-normal"
+                        x-show="getPeriodThreshold('change360d')">
+                        (<span class="text-emerald-500" x-text="`+${getPeriodThreshold('change360d').surge}%`"></span><span class="text-slate-600">/</span><span class="text-rose-500" x-text="`${getPeriodThreshold('change360d').dip}%`"></span>)
+                      </span>
+                    </div>
+                  </th>
+
+                  <!-- 180D 変動率 -->
+                  <th
+                    @click="setPriceChangeSort('change180d')"
+                    class="px-3 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex flex-col items-end">
+                      <div class="flex items-center justify-end space-x-1">
+                        <span>180D変動率</span>
+                        <span x-show="priceChangeSortKey === 'change180d'"
+                          x-text="priceChangeSortAsc ? '▲' : '▼'"
+                          class="text-[10px] text-emerald-400"></span>
+                      </div>
+                      <span class="text-[9px] font-normal"
+                        x-show="getPeriodThreshold('change180d')">
+                        (<span class="text-emerald-500" x-text="`+${getPeriodThreshold('change180d').surge}%`"></span><span class="text-slate-600">/</span><span class="text-rose-500" x-text="`${getPeriodThreshold('change180d').dip}%`"></span>)
+                      </span>
+                    </div>
+                  </th>
+
+                  <!-- 90D 変動率 -->
+                  <th
+                    @click="setPriceChangeSort('change90d')"
+                    class="px-3 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex flex-col items-end">
+                      <div class="flex items-center justify-end space-x-1">
+                        <span>90D変動率</span>
+                        <span x-show="priceChangeSortKey === 'change90d'"
+                          x-text="priceChangeSortAsc ? '▲' : '▼'"
+                          class="text-[10px] text-emerald-400"></span>
+                      </div>
+                      <span class="text-[9px] font-normal" x-show="getPeriodThreshold('change90d')">
+                        (<span class="text-emerald-500" x-text="`+${getPeriodThreshold('change90d').surge}%`"></span><span class="text-slate-600">/</span><span class="text-rose-500" x-text="`${getPeriodThreshold('change90d').dip}%`"></span>)
+                      </span>
+                    </div>
+                  </th>
+
+                  <!-- 30D 変動率 -->
+                  <th
+                    @click="setPriceChangeSort('change30d')"
+                    class="px-3 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex flex-col items-end">
+                      <div class="flex items-center justify-end space-x-1">
+                        <span>30D変動率</span>
+                        <span x-show="priceChangeSortKey === 'change30d'"
+                          x-text="priceChangeSortAsc ? '▲' : '▼'"
+                          class="text-[10px] text-emerald-400"></span>
+                      </div>
+                      <span class="text-[9px] font-normal" x-show="getPeriodThreshold('change30d')">
+                        (<span class="text-emerald-500" x-text="`+${getPeriodThreshold('change30d').surge}%`"></span><span class="text-slate-600">/</span><span class="text-rose-500" x-text="`${getPeriodThreshold('change30d').dip}%`"></span>)
+                      </span>
+                    </div>
+                  </th>
+
+                  <!-- 7D 変動率 -->
+                  <th
+                    @click="setPriceChangeSort('change7d')"
+                    class="px-3 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex flex-col items-end">
+                      <div class="flex items-center justify-end space-x-1">
+                        <span>7D変動率</span>
+                        <span x-show="priceChangeSortKey === 'change7d'"
+                          x-text="priceChangeSortAsc ? '▲' : '▼'"
+                          class="text-[10px] text-emerald-400"></span>
+                      </div>
+                      <span class="text-[9px] font-normal" x-show="getPeriodThreshold('change7d')">
+                        (<span class="text-emerald-500" x-text="`+${getPeriodThreshold('change7d').surge}%`"></span><span class="text-slate-600">/</span><span class="text-rose-500" x-text="`${getPeriodThreshold('change7d').dip}%`"></span>)
+                      </span>
+                    </div>
+                  </th>
+
+                  <!-- 24H 変動率 -->
+                  <th
+                    @click="setPriceChangeSort('change24h')"
+                    class="px-3 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex flex-col items-end">
+                      <div class="flex items-center justify-end space-x-1">
+                        <span>24H変動率</span>
+                        <span x-show="priceChangeSortKey === 'change24h'"
+                          x-text="priceChangeSortAsc ? '▲' : '▼'"
+                          class="text-[10px] text-emerald-400"></span>
+                      </div>
+                      <span class="text-[9px] font-normal" x-show="getPeriodThreshold('change24h')">
+                        (<span class="text-emerald-500" x-text="`+${getPeriodThreshold('change24h').surge}%`"></span><span class="text-slate-600">/</span><span class="text-rose-500" x-text="`${getPeriodThreshold('change24h').dip}%`"></span>)
+                      </span>
+                    </div>
+                  </th>
+
+                  <!-- 24H 取引出来高 -->
+                  <th
+                    @click="setPriceChangeSort('volume24h')"
+                    class="px-4 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex items-center justify-end space-x-1">
+                      <span>直近24H出来高</span>
+                      <span x-show="priceChangeSortKey === 'volume24h'"
+                        x-text="priceChangeSortAsc ? '▲' : '▼'"
+                        class="text-[10px] text-emerald-400"></span>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 font-mono text-xs">
+                <!-- ローディング -->
+                <template x-if="isPriceChangeLoading && priceChangeItems.length === 0">
+                  <tr>
+                    <td colspan="9" class="text-center py-12 text-slate-500 font-sans">
+                      <div class="flex flex-col items-center justify-center space-y-2">
+                        <div
+                          class="animate-spin w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full"></div>
+                        <span>騰落率データを集計中...</span>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+
+                <!-- データ空表示 -->
+                <template
+                  x-if="!isPriceChangeLoading && getFilteredPriceChangeItems().length === 0">
+                  <tr>
+                    <td colspan="9" class="text-center py-12 text-slate-500 font-sans">
+                      表示対象の騰落率データが見つかりませんでした
+                    </td>
+                  </tr>
+                </template>
+
+                <!-- 騰落率行リスト -->
+                <template x-for="item in getFilteredPriceChangeItems()" :key="item.coin">
+                  <tr :class="getRowHighlightClass(item)">
+                    <!-- 銘柄名 -->
+                    <td class="px-4 py-2 font-bold text-slate-100 font-sans">
+                      <div class="flex items-center space-x-2">
+                        <span x-text="item.coin"></span>
+                        <template x-if="getRowHighlightType(item) === 'surge'">
+                          <span
+                            class="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">急騰</span>
+                        </template>
+                        <template x-if="getRowHighlightType(item) === 'dip'">
+                          <span
+                            class="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40">急落</span>
+                        </template>
+                      </div>
+                    </td>
+
+                    <!-- 現在価格 -->
+                    <td class="px-4 py-2 text-right font-mono text-slate-200"
+                      x-text="formatPriceChangeMarkPrice(item.markPrice)"></td>
+
+                    <!-- 360D 変動率 -->
+                    <td class="px-3 py-2 text-right font-mono"
+                      :class="priceChangeSortKey === 'change360d' ? 'bg-slate-950/30' : ''">
+                      <span
+                        class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-bold transition-all"
+                        :class="[
+                          getPriceChangeBadgeClass(item.change360d),
+                          isCellThresholdExceeded('change360d', item.change360d) === 'surge' ? 'ring-2 ring-emerald-500 font-extrabold' : '',
+                          isCellThresholdExceeded('change360d', item.change360d) === 'dip' ? 'ring-2 ring-rose-500 font-extrabold' : ''
+                        ]"
+                        x-text="formatPriceChange(item.change360d)"
+                      ></span>
+                    </td>
+
+                    <!-- 180D 変動率 -->
+                    <td class="px-3 py-2 text-right font-mono"
+                      :class="priceChangeSortKey === 'change180d' ? 'bg-slate-950/30' : ''">
+                      <span
+                        class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-bold transition-all"
+                        :class="[
+                          getPriceChangeBadgeClass(item.change180d),
+                          isCellThresholdExceeded('change180d', item.change180d) === 'surge' ? 'ring-2 ring-emerald-500 font-extrabold' : '',
+                          isCellThresholdExceeded('change180d', item.change180d) === 'dip' ? 'ring-2 ring-rose-500 font-extrabold' : ''
+                        ]"
+                        x-text="formatPriceChange(item.change180d)"
+                      ></span>
+                    </td>
+
+                    <!-- 90D 変動率 -->
+                    <td class="px-3 py-2 text-right font-mono"
+                      :class="priceChangeSortKey === 'change90d' ? 'bg-slate-950/30' : ''">
+                      <span
+                        class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-bold transition-all"
+                        :class="[
+                          getPriceChangeBadgeClass(item.change90d),
+                          isCellThresholdExceeded('change90d', item.change90d) === 'surge' ? 'ring-2 ring-emerald-500 font-extrabold' : '',
+                          isCellThresholdExceeded('change90d', item.change90d) === 'dip' ? 'ring-2 ring-rose-500 font-extrabold' : ''
+                        ]"
+                        x-text="formatPriceChange(item.change90d)"
+                      ></span>
+                    </td>
+
+                    <!-- 30D 変動率 -->
+                    <td class="px-3 py-2 text-right font-mono"
+                      :class="priceChangeSortKey === 'change30d' ? 'bg-slate-950/30' : ''">
+                      <span
+                        class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-bold transition-all"
+                        :class="[
+                          getPriceChangeBadgeClass(item.change30d),
+                          isCellThresholdExceeded('change30d', item.change30d) === 'surge' ? 'ring-2 ring-emerald-500 font-extrabold' : '',
+                          isCellThresholdExceeded('change30d', item.change30d) === 'dip' ? 'ring-2 ring-rose-500 font-extrabold' : ''
+                        ]"
+                        x-text="formatPriceChange(item.change30d)"
+                      ></span>
+                    </td>
+
+                    <!-- 7D 変動率 -->
+                    <td class="px-3 py-2 text-right font-mono"
+                      :class="priceChangeSortKey === 'change7d' ? 'bg-slate-950/30' : ''">
+                      <span
+                        class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-bold transition-all"
+                        :class="[
+                          getPriceChangeBadgeClass(item.change7d),
+                          isCellThresholdExceeded('change7d', item.change7d) === 'surge' ? 'ring-2 ring-emerald-500 font-extrabold' : '',
+                          isCellThresholdExceeded('change7d', item.change7d) === 'dip' ? 'ring-2 ring-rose-500 font-extrabold' : ''
+                        ]"
+                        x-text="formatPriceChange(item.change7d)"
+                      ></span>
+                    </td>
+
+                    <!-- 24H 変動率 -->
+                    <td class="px-3 py-2 text-right font-mono"
+                      :class="priceChangeSortKey === 'change24h' ? 'bg-slate-950/30' : ''">
+                      <span
+                        class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-bold transition-all"
+                        :class="[
+                          getPriceChangeBadgeClass(item.change24h),
+                          isCellThresholdExceeded('change24h', item.change24h) === 'surge' ? 'ring-2 ring-emerald-500 font-extrabold' : '',
+                          isCellThresholdExceeded('change24h', item.change24h) === 'dip' ? 'ring-2 ring-rose-500 font-extrabold' : ''
+                        ]"
+                        x-text="formatPriceChange(item.change24h)"
+                      ></span>
+                    </td>
+
+                    <!-- 直近24H出来高 -->
+                    <td class="px-4 py-2 text-right font-mono text-slate-300 font-medium"
+                      x-text="formatPriceChangeVolume(item.volume24h)"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           [タブ: 取引高倍率ランキング (Volume Ranking) - dashboard-worker 互換]
+           ==================================================================== -->
+      <section x-show="currentTab === 'volume-ranking'" x-cloak
+        class="space-y-1.5 flex-1 flex flex-col w-full"
+        aria-label="Volume Ranking Tab">
+        <!-- 上部ツールバー -->
+        <div
+          class="bg-slate-900 border border-slate-800 rounded-xl py-1.5 px-3 shadow-sm flex flex-wrap items-center justify-between gap-1.5">
+          <!-- 概要ステータス -->
+          <div class="flex items-center space-x-2 shrink-0">
+            <div
+              class="w-6 h-6 rounded-md bg-indigo-600/20 text-indigo-400 flex items-center justify-center font-bold shrink-0">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            </div>
+            <h2 class="text-xs sm:text-sm font-bold text-slate-100 flex items-center space-x-2">
+              <span>出来高倍率ランキング</span>
+              <span
+                class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
+                x-text="`${getFilteredVolumeRankingItems().length} 銘柄`"></span>
+              <span class="text-[11px] font-normal text-slate-400 font-mono"
+                x-show="volumeRankingTimestamp" x-text="`(${volumeRankingTimestamp} 更新)`"></span>
+            </h2>
+          </div>
+
+          <!-- 検索バー & 手動再取得 -->
+          <div class="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+            <div class="relative flex-1 sm:w-52">
+              <input
+                type="text"
+                placeholder="銘柄検索 (例: BTC)..."
+                x-model="volumeRankingSearchQuery"
+                class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-500"
+              />
+              <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" fill="none"
+                stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+
+            <button
+              type="button"
+              @click="fetchVolumeRanking()"
+              :disabled="isVolumeRankingLoading"
+              class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-lg text-xs font-medium shadow-sm transition-colors flex items-center space-x-1 shrink-0 disabled:opacity-50 cursor-pointer"
+              title="最新の出来高データを再取得"
+            >
+              <svg :class="isVolumeRankingLoading ? 'animate-spin' : ''" class="w-3.5 h-3.5"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span x-text="isVolumeRankingLoading ? '読込中...' : '再取得'"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- エラー表示 -->
+        <div x-show="volumeRankingError" x-cloak
+          class="p-3 bg-rose-950/80 border border-rose-800 rounded-xl text-rose-300 text-xs flex items-center space-x-2">
+          <svg class="w-4 h-4 shrink-0 text-rose-400" fill="none" stroke="currentColor"
+            viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span x-text="volumeRankingError"></span>
+        </div>
+
+        <!-- ランキングテーブルカード -->
+        <div
+          class="bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden flex-1 flex flex-col">
+          <div class="overflow-auto max-h-[calc(100vh-220px)] min-h-[300px]">
+            <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
+              <thead
+                class="sticky top-0 z-10 bg-slate-950/95 text-slate-400 font-semibold border-b border-slate-800 text-[11px] select-none">
+                <tr>
+                  <!-- 順位 -->
+                  <th
+                    @click="setVolumeRankingSort('rank')"
+                    class="px-4 py-2 w-16 text-center cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex items-center justify-center space-x-1">
+                      <span>順位</span>
+                      <span x-show="volumeRankingSortKey === 'rank'"
+                        x-text="volumeRankingSortAsc ? '▲' : '▼'"
+                        class="text-[10px] text-indigo-400"></span>
+                    </div>
+                  </th>
+
+                  <!-- 銘柄名 -->
+                  <th
+                    @click="setVolumeRankingSort('coin')"
+                    class="px-4 py-2 cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex items-center space-x-1">
+                      <span>銘柄</span>
+                      <span x-show="volumeRankingSortKey === 'coin'"
+                        x-text="volumeRankingSortAsc ? '▲' : '▼'"
+                        class="text-[10px] text-indigo-400"></span>
+                    </div>
+                  </th>
+
+                  <!-- マーク価格 -->
+                  <th
+                    @click="setVolumeRankingSort('markPrice')"
+                    class="px-4 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex items-center justify-end space-x-1">
+                      <span>現在価格</span>
+                      <span x-show="volumeRankingSortKey === 'markPrice'"
+                        x-text="volumeRankingSortAsc ? '▲' : '▼'"
+                        class="text-[10px] text-indigo-400"></span>
+                    </div>
+                  </th>
+
+                  <!-- 24H変動率 -->
+                  <th
+                    @click="setVolumeRankingSort('change24h')"
+                    class="px-4 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex items-center justify-end space-x-1">
+                      <span>24H変動率</span>
+                      <span x-show="volumeRankingSortKey === 'change24h'"
+                        x-text="volumeRankingSortAsc ? '▲' : '▼'"
+                        class="text-[10px] text-indigo-400"></span>
+                    </div>
+                  </th>
+
+                  <!-- 24H 取引出来高 -->
+                  <th
+                    @click="setVolumeRankingSort('volume24h')"
+                    class="px-4 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex items-center justify-end space-x-1">
+                      <span>直近24H出来高</span>
+                      <span x-show="volumeRankingSortKey === 'volume24h'"
+                        x-text="volumeRankingSortAsc ? '▲' : '▼'"
+                        class="text-[10px] text-indigo-400"></span>
+                    </div>
+                  </th>
+
+                  <!-- 30D 日次平均取引出来高 -->
+                  <th
+                    @click="setVolumeRankingSort('avgDailyVolume30d')"
+                    class="px-4 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex items-center justify-end space-x-1">
+                      <span>30D日次平均出来高</span>
+                      <span x-show="volumeRankingSortKey === 'avgDailyVolume30d'"
+                        x-text="volumeRankingSortAsc ? '▲' : '▼'"
+                        class="text-[10px] text-indigo-400"></span>
+                    </div>
+                  </th>
+
+                  <!-- 出来高倍率 (Ratio) -->
+                  <th
+                    @click="setVolumeRankingSort('volumeRatio')"
+                    class="px-4 py-2 text-right cursor-pointer hover:text-slate-100 transition-colors"
+                  >
+                    <div class="flex items-center justify-end space-x-1">
+                      <span>出来高倍率</span>
+                      <span x-show="volumeRankingSortKey === 'volumeRatio'"
+                        x-text="volumeRankingSortAsc ? '▲' : '▼'"
+                        class="text-[10px] text-indigo-400"></span>
+                    </div>
+                  </th>
+
+                  <!-- 状態 -->
+                  <th class="px-4 py-2 text-center w-28">状態</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 font-mono text-xs">
+                <!-- ローディング -->
+                <template x-if="isVolumeRankingLoading && volumeRankingItems.length === 0">
+                  <tr>
+                    <td colspan="8" class="text-center py-12 text-slate-500 font-sans">
+                      <div class="flex flex-col items-center justify-center space-y-2">
+                        <div
+                          class="animate-spin w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full"></div>
+                        <span>出来高倍率ランキングを集計中...</span>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+
+                <!-- データ空表示 -->
+                <template
+                  x-if="!isVolumeRankingLoading && getFilteredVolumeRankingItems().length === 0">
+                  <tr>
+                    <td colspan="8" class="text-center py-12 text-slate-500 font-sans">
+                      表示対象の出来高データが見つかりませんでした
+                    </td>
+                  </tr>
+                </template>
+
+                <!-- ランキング行リスト -->
+                <template x-for="(item, idx) in getFilteredVolumeRankingItems()" :key="item.coin">
+                  <tr class="hover:bg-slate-800/40 transition-colors"
+                    :class="item.volumeRatio >= 2.0 ? 'bg-indigo-950/20' : ''">
+                    <!-- 順位 -->
+                    <td class="px-4 py-2 text-center text-slate-400 font-semibold"
+                      x-text="item.rank || (idx + 1)"></td>
+
+                    <!-- 銘柄名 -->
+                    <td class="px-4 py-2 font-bold text-slate-100 font-sans">
+                      <div class="flex items-center space-x-2">
+                        <span x-text="item.coin"></span>
+                        <template x-if="item.volumeRatio >= 3.0">
+                          <span
+                            class="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-indigo-500/30 text-indigo-300 border border-indigo-400/50">3x 超急増</span>
+                        </template>
+                      </div>
+                    </td>
+
+                    <!-- 現在価格 -->
+                    <td class="px-4 py-2 text-right font-mono text-slate-200"
+                      x-text="formatPriceChangeMarkPrice(item.markPrice)"></td>
+
+                    <!-- 24H変動率 -->
+                    <td class="px-4 py-2 text-right font-mono font-semibold"
+                      :class="getPriceChangeTextClass(item.change24h)">
+                      <span x-text="formatPriceChange(item.change24h)"></span>
+                    </td>
+
+                    <!-- 24H 出来高 -->
+                    <td class="px-4 py-2 text-right font-mono text-slate-200 font-medium"
+                      x-text="formatPriceChangeVolume(item.volume24h)"></td>
+
+                    <!-- 30D 日次平均出来高 -->
+                    <td class="px-4 py-2 text-right font-mono text-slate-400"
+                      x-text="formatPriceChangeVolume(item.avgDailyVolume30d)"></td>
+
+                    <!-- 出来高倍率 -->
+                    <td class="px-4 py-2 text-right font-mono">
+                      <span
+                        class="inline-block px-2 py-0.5 rounded text-[11px] font-bold"
+                        :class="getVolumeRatioBadgeClass(item.volumeRatio)"
+                        x-text="formatVolumeRatio(item.volumeRatio)"
+                      ></span>
+                    </td>
+
+                    <!-- 状態バッジ -->
+                    <td class="px-4 py-2 text-center">
+                      <span
+                        class="px-2 py-0.5 rounded text-[10px] font-semibold"
+                        :class="getVolumeRatioStatusBadge(item.volumeRatio).class"
+                        x-text="getVolumeRatioStatusBadge(item.volumeRatio).label"
+                      ></span>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- [タブ: 🚨 エラーログ一覧] -->
+      <section x-show="currentTab === 'errors'" x-cloak class="space-y-2">
+        <div
+          class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-[#131926] border border-[#1E293B] px-4 py-2 rounded-xl">
+          <div class="flex items-center space-x-2">
+            <span class="text-rose-400 font-bold text-sm">🚨 エラーログ一覧 (最新100件)</span>
+            <span
+              class="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-950 text-rose-300 border border-rose-800"
+              x-text="errorLogs.length + ' 件'"></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              @click="fetchErrors()"
+              class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold transition"
+            >
+              🔄 再読込
+            </button>
+            <button
+              type="button"
+              @click="clearErrors()"
+              class="px-2.5 py-1 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded text-xs font-semibold transition"
+            >
+              🗑️ ログ消去
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-[#131926] border border-[#1E293B] rounded-xl overflow-hidden shadow-xl">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
+              <thead class="bg-[#0F1422] text-slate-400 font-semibold border-b border-[#1E293B]">
+                <tr>
+                  <th class="px-3 py-2 w-36">発生日時 (JST)</th>
+                  <th class="px-3 py-2 w-28">サービス</th>
+                  <th class="px-3 py-2 w-32">コンテキスト</th>
+                  <th class="px-3 py-2">エラー詳細・メッセージ</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#1E293B]/60 font-mono text-xs">
+                <template x-if="errorLogs.length === 0">
+                  <tr>
+                    <td colspan="4" class="px-4 py-8 text-center text-slate-500">
+                      現在記録されたエラーログはありません (正常稼働中)
+                    </td>
+                  </tr>
+                </template>
+                <template x-for="err in errorLogs" :key="err.timestamp + err.message">
+                  <tr class="hover:bg-rose-950/20 transition">
+                    <td class="px-3 py-2 text-slate-400" x-text="formatTime(err.timestamp)"></td>
+                    <td class="px-3 py-2 font-bold text-slate-200" x-text="err.service"></td>
+                    <td class="px-3 py-2 text-rose-400 font-semibold" x-text="err.context"></td>
+                    <td class="px-3 py-2 text-rose-200">
+                      <div class="font-medium" x-text="err.message"></div>
+                      <template x-if="err.stack">
+                        <pre
+                          class="mt-1 text-[10px] text-rose-300/80 bg-black/40 p-1.5 rounded overflow-x-auto"
+                          x-text="err.stack"></pre>
+                      </template>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="w-full text-center text-xs text-[#54647f] py-2 border-t border-[#1A2234]">
+        <span>Hyperliquid MIN/MAX Monitor &copy; 2026 | Surge DIP Trader Dashboard</span>
+      </footer>
+    </div>
+  </body>
+</html>

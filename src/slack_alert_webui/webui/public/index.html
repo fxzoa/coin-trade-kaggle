@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html class="dark" lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0B0F17" />
+    <title>Slack Alert Bot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "obsidian": "#0B0F17",
+              "surface-1": "#131926",
+              "surface-2": "#1A2234",
+              "border-base": "#1E293B",
+              "border-elevated": "#334155",
+              "telemetry": "#38BDF8",
+              "emerald-ok": "#10B981",
+              "crimson-err": "#F43F5E",
+              "amber-warn": "#F59E0B",
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              mono: ["JetBrains Mono", "monospace"],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      /* Obsidian Telemetry - Custom Overrides & Animations */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: #0b0f17;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #1e293b;
+        border-radius: 3px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+      }
+
+      .nav-status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        flex-shrink: 0;
+      }
+
+      .nav-status-dot.healthy {
+        background-color: #10b981;
+        box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+      }
+
+      .tag-1h {
+        background: rgba(56, 189, 248, 0.1);
+        color: #38bdf8;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 4px;
+      }
+
+      .status-queued {
+        background: rgba(16, 185, 129, 0.12);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .action-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border: 1px solid rgba(244, 63, 94, 0.35);
+        border-radius: 4px;
+        background: rgba(244, 63, 94, 0.1);
+        color: #fda4af;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 150ms ease, border-color 150ms ease;
+      }
+
+      .action-badge:hover:not(:disabled) {
+        border-color: rgba(244, 63, 94, 0.65);
+        background: rgba(244, 63, 94, 0.2);
+      }
+
+      .action-badge:focus-visible {
+        outline: 2px solid #f43f5e;
+        outline-offset: 2px;
+      }
+
+      .action-badge:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+
+      .mono {
+        font-family: "JetBrains Mono", monospace;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-obsidian text-slate-100 font-sans antialiased selection:bg-telemetry/30 selection:text-telemetry flex flex-col">
+    <!-- ヘッダー -->
+    <header class="h-14 shrink-0 border-b border-border-base bg-[#0F1422]/80 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between gap-4 sticky top-0 z-20">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-8 h-8 rounded bg-telemetry/10 border border-telemetry/30 flex items-center justify-center text-telemetry shadow-[0_0_12px_-2px_rgba(56,189,248,0.3)] shrink-0">
+          <span class="material-symbols-outlined text-[18px]">notifications_active</span>
+        </div>
+        <div class="flex items-center gap-2.5 flex-wrap min-w-0">
+          <h1 class="text-sm font-bold tracking-tight text-white leading-tight">Slack Alert Bot</h1>
+          <span class="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold border border-telemetry/30 bg-telemetry/10 text-telemetry">slack:alert:queue</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5 shrink-0">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-1 border border-emerald-ok/30 text-[11px] font-mono font-semibold text-emerald-ok" title="BOT稼働中">
+          <span class="nav-status-dot healthy"></span>
+          <span>BOT</span>
+        </span>
+        <button
+          id="btn-slack-test"
+          onclick="triggerSlackTest()"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded bg-surface-1 hover:bg-surface-2 border border-amber-warn/40 hover:border-amber-warn text-xs font-medium text-amber-warn transition-colors cursor-pointer"
+        >
+          <span class="material-symbols-outlined text-[15px]">send</span>
+          <span>テスト</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main class="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 py-4 space-y-4">
+      <!-- KPI カード -->
+      <section class="grid grid-cols-2 sm:grid-cols-5 gap-3" aria-label="KPI">
+        <div class="bg-surface-1 border border-border-base hover:border-border-elevated rounded-lg p-3 transition-colors flex flex-col justify-between gap-1.5">
+          <div class="flex items-center justify-between text-[11px] text-slate-400 font-medium">
+            <span>総送信履歴</span>
+            <span class="font-mono text-telemetry bg-telemetry/10 border border-telemetry/30 px-1.5 py-0.5 rounded text-[10px]">ALL</span>
+          </div>
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-xl font-bold font-mono tracking-tight text-white tabular-nums" id="stat-total">0</span>
+            <span class="text-[11px] text-slate-400 font-medium">件</span>
+          </div>
+          <div class="text-[10px] text-slate-500 flex items-center justify-between pt-1.5 border-t border-border-base">
+            <span>全期間</span>
+            <span class="text-telemetry font-mono font-medium" id="stat-total-foot">TOTAL</span>
+          </div>
+        </div>
+
+        <div class="bg-surface-1 border border-border-base hover:border-border-elevated rounded-lg p-3 transition-colors flex flex-col justify-between gap-1.5">
+          <div class="flex items-center justify-between text-[11px] text-slate-400 font-medium">
+            <span>送信成功</span>
+            <span class="font-mono text-emerald-ok bg-emerald-ok/10 border border-emerald-ok/30 px-1.5 py-0.5 rounded text-[10px]">OK</span>
+          </div>
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-xl font-bold font-mono tracking-tight text-white tabular-nums" id="stat-ok">0</span>
+            <span class="text-[11px] text-slate-400 font-medium">件</span>
+          </div>
+          <div class="text-[10px] text-slate-500 flex items-center justify-between pt-1.5 border-t border-border-base">
+            <span>Slack配信済</span>
+            <span class="text-emerald-ok font-mono font-medium" id="stat-ok-foot">SENT</span>
+          </div>
+        </div>
+
+        <div class="bg-surface-1 border border-border-base hover:border-border-elevated rounded-lg p-3 transition-colors flex flex-col justify-between gap-1.5">
+          <div class="flex items-center justify-between text-[11px] text-slate-400 font-medium">
+            <span>送信失敗</span>
+            <span class="font-mono text-crimson-err bg-crimson-err/10 border border-crimson-err/30 px-1.5 py-0.5 rounded text-[10px]">FAILED</span>
+          </div>
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-xl font-bold font-mono tracking-tight text-white tabular-nums" id="stat-failed">0</span>
+            <span class="text-[11px] text-slate-400 font-medium">件</span>
+          </div>
+          <div class="text-[10px] text-slate-500 flex items-center justify-between pt-1.5 border-t border-border-base">
+            <span class="truncate">要確認 (トークン/チャンネル)</span>
+            <span class="text-crimson-err font-mono font-medium shrink-0 ml-1" id="stat-failed-foot">ERROR</span>
+          </div>
+        </div>
+
+        <div class="bg-surface-1 border border-border-base hover:border-border-elevated rounded-lg p-3 transition-colors flex flex-col justify-between gap-1.5">
+          <div class="flex items-center justify-between text-[11px] text-slate-400 font-medium">
+            <span>直近24H</span>
+            <span class="font-mono text-purple-400 bg-purple-500/10 border border-purple-500/30 px-1.5 py-0.5 rounded text-[10px]">24H</span>
+          </div>
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-xl font-bold font-mono tracking-tight text-white tabular-nums" id="stat-24h">0</span>
+            <span class="text-[11px] text-slate-400 font-medium">件</span>
+          </div>
+          <div class="text-[10px] text-slate-500 flex items-center justify-between pt-1.5 border-t border-border-base">
+            <span>直近24時間の通知数</span>
+            <span class="text-purple-300 font-mono font-medium" id="stat-24h-foot">24H</span>
+          </div>
+        </div>
+
+        <div class="bg-surface-1 border border-border-base hover:border-border-elevated rounded-lg p-3 transition-colors flex flex-col justify-between gap-1.5 col-span-2 sm:col-span-1">
+          <div class="flex items-center justify-between text-[11px] text-slate-400 font-medium">
+            <span>最終送信</span>
+            <span class="font-mono text-amber-warn bg-amber-warn/10 border border-amber-warn/30 px-1.5 py-0.5 rounded text-[10px]">LAST</span>
+          </div>
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-xl font-bold font-mono tracking-tight text-white tabular-nums" id="stat-last">0</span>
+          </div>
+          <div class="text-[10px] text-slate-500 flex items-center justify-between pt-1.5 border-t border-border-base">
+            <span>最新メッセージ</span>
+            <span class="text-amber-warn font-mono font-medium" id="stat-last-foot">--:--:--</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- フィルターバー -->
+      <div class="w-full bg-surface-1 border border-border-base rounded-lg px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-slate-400 text-[11px] font-mono uppercase tracking-wider font-semibold">絞り込み:</span>
+          <select id="sel-type" onchange="loadData()" class="bg-obsidian border border-border-base text-slate-200 rounded px-2.5 py-1 text-xs font-mono outline-none focus:border-telemetry focus:ring-0">
+            <option value="">全タイプ</option>
+            <option>TEXT</option><option>ERROR</option><option>INFO</option><option>ORDER_OPEN</option>
+            <option>ORDER_CANCELED</option><option>CLOSE_POSITION</option><option>FILL</option><option>UNKNOWN</option>
+          </select>
+          <select id="sel-ok" onchange="loadData()" class="bg-obsidian border border-border-base text-slate-200 rounded px-2.5 py-1 text-xs font-mono outline-none focus:border-telemetry focus:ring-0">
+            <option value="">成否: すべて</option>
+            <option value="true">成功のみ</option>
+            <option value="false">失敗のみ</option>
+          </select>
+          <select id="sel-hours" onchange="loadData()" class="bg-obsidian border border-border-base text-slate-200 rounded px-2.5 py-1 text-xs font-mono outline-none focus:border-telemetry focus:ring-0">
+            <option value="24">過去24H</option>
+            <option value="168">過去7日</option>
+            <option value="0">全期間</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="relative">
+            <span class="material-symbols-outlined text-[15px] text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">search</span>
+            <input
+              id="input-search"
+              type="text"
+              placeholder="本文・送信元・チャンネル検索..."
+              oninput="debouncedLoad()"
+              class="bg-obsidian border border-border-base focus:border-telemetry focus:ring-0 rounded pl-8 pr-3 py-1 text-xs text-slate-100 placeholder-slate-500 outline-none w-52 sm:w-64 font-mono transition-colors"
+            />
+          </div>
+          <span id="lbl-result-count" class="text-[11px] text-slate-400 font-mono tabular-nums">表示中: 0件</span>
+        </div>
+      </div>
+
+      <!-- 履歴テーブル -->
+      <div class="w-full bg-surface-1 border border-border-base rounded-lg overflow-x-auto">
+        <table class="w-full border-collapse text-left">
+          <thead>
+            <tr class="bg-surface-2/60 border-b border-border-base text-[11px] font-mono uppercase tracking-wider text-slate-400">
+              <th class="px-3.5 py-2.5 font-semibold whitespace-nowrap">送信日時 (JST)</th>
+              <th class="px-3.5 py-2.5 font-semibold whitespace-nowrap">タイプ</th>
+              <th class="px-3.5 py-2.5 font-semibold whitespace-nowrap">送信元</th>
+              <th class="px-3.5 py-2.5 font-semibold whitespace-nowrap">チャンネル</th>
+              <th class="px-3.5 py-2.5 font-semibold whitespace-nowrap">メッセージ</th>
+              <th class="px-3.5 py-2.5 font-semibold whitespace-nowrap">結果</th>
+              <th class="px-3.5 py-2.5 font-semibold whitespace-nowrap">操作</th>
+            </tr>
+          </thead>
+          <tbody id="msg-tbody" class="divide-y divide-border-base text-xs">
+            <tr><td colspan="7" class="text-center py-8 text-slate-400 text-xs">データを読み込み中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <script>
+      let countdown = 30;
+      let debounceTimer;
+
+      function formatJst(ms) {
+        if (!ms) return '--:--:--';
+        const d = new Date(Number(ms) + 9 * 3600 * 1000);
+        const p = (n) => String(n).padStart(2, '0');
+        return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+      }
+
+      function debouncedLoad() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(loadData, 300);
+      }
+
+      function el(tag, className, text) {
+        const e = document.createElement(tag);
+        if (className) e.className = className;
+        if (text !== undefined) e.textContent = text;
+        return e;
+      }
+
+      const channelLabels = {
+        C066VHECJ7R: '通常通知',
+        C063VF2H8ES: 'エラー通知',
+        C06445Q9VA8: 'BUY約定',
+        C067GQ7SM5F: 'SELL約定',
+        C0644H4P84U: '利確決済',
+        C066PJS0QEB: '損切り決済',
+        C04JW4TBMU6: '新規注文',
+        C067CQ8CJ3W: 'TP注文',
+      };
+
+      function renderRows(messages) {
+        const tbody = document.getElementById('msg-tbody');
+        tbody.replaceChildren();
+        if (!messages.length) {
+          const tr = el('tr');
+          const td = el('td', 'text-center py-8 text-slate-400 text-xs', '該当する送信履歴はありません');
+          td.colSpan = 7;
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+          return;
+        }
+        for (const m of messages) {
+          const tr = el('tr', 'hover:bg-surface-2/50 transition-colors');
+          const tdDate = el('td', 'px-3.5 py-2.5 mono text-xs whitespace-nowrap');
+          const [date, time] = formatJst(m.createdAt).split(' ');
+          if (time) {
+            tdDate.appendChild(el('span', 'block text-slate-500 text-[11px]', date));
+            tdDate.appendChild(el('span', 'block text-slate-200 tabular-nums', time));
+          } else {
+            tdDate.textContent = date;
+            tdDate.classList.add('text-slate-400');
+          }
+          tr.appendChild(tdDate);
+
+          const tdType = el('td', 'px-3.5 py-2.5 whitespace-nowrap');
+          tdType.appendChild(el('span', 'tag-1h', m.type));
+          tr.appendChild(tdType);
+
+          tr.appendChild(el('td', 'px-3.5 py-2.5 mono text-slate-300 text-xs whitespace-nowrap', m.worker));
+
+          const tdChannel = el('td', 'px-3.5 py-2.5 mono text-slate-400 text-xs whitespace-nowrap');
+          tdChannel.textContent = channelLabels[m.channel] || m.channel;
+          tdChannel.title = m.channel;
+          tr.appendChild(tdChannel);
+
+          const tdText = el('td', 'px-3.5 py-2.5 text-xs text-slate-200 max-w-[560px]');
+          tdText.appendChild(el('div', 'whitespace-pre-wrap break-words line-clamp-3', m.text));
+          tr.appendChild(tdText);
+
+          const tdOk = el('td', 'px-3.5 py-2.5 whitespace-nowrap');
+          if (m.ok) {
+            tdOk.appendChild(el('span', 'status-queued', '✓ SENT'));
+          } else {
+            tdOk.appendChild(el('span', 'text-[11px] text-crimson-err font-mono font-semibold', '⚠ FAILED'));
+            if (m.error) tdOk.appendChild(el('div', 'text-[10px] text-rose-300/80 font-mono mt-0.5', m.error));
+          }
+          tr.appendChild(tdOk);
+
+          const tdActions = el('td', 'px-3.5 py-2.5 whitespace-nowrap');
+          const deleteBadge = el('button', 'action-badge', '削除');
+          deleteBadge.type = 'button';
+          deleteBadge.setAttribute('aria-label', `履歴 ${m.id} を削除`);
+          deleteBadge.addEventListener('click', () => deleteMessage(m.id, deleteBadge));
+          tdActions.appendChild(deleteBadge);
+          tr.appendChild(tdActions);
+
+          tbody.appendChild(tr);
+        }
+      }
+
+      async function deleteMessage(id, button) {
+        if (!Number.isSafeInteger(Number(id)) || Number(id) <= 0) {
+          alert('履歴IDが不正なため削除できません');
+          return;
+        }
+        button.disabled = true;
+        try {
+          const res = await fetch(`api/messages/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+          await loadData();
+        } catch (err) {
+          console.error('delete failed', err);
+          alert(`履歴を削除できませんでした: ${String(err)}`);
+          button.disabled = false;
+        }
+      }
+
+      async function loadData() {
+        const p = new URLSearchParams({ limit: '200' });
+        const type = document.getElementById('sel-type').value;
+        const ok = document.getElementById('sel-ok').value;
+        const hours = document.getElementById('sel-hours').value;
+        const kw = document.getElementById('input-search').value.trim();
+        if (type) p.set('type', type);
+        if (ok) p.set('ok', ok);
+        if (hours !== '0') p.set('hours', hours);
+        if (kw) p.set('keyword', kw);
+        try {
+          const [mRes, sRes] = await Promise.all([fetch('api/messages?' + p), fetch('api/stats')]);
+          if (!mRes.ok || !sRes.ok) {
+            throw new Error(`履歴 API: ${mRes.status}, 統計 API: ${sRes.status}`);
+          }
+          const m = await mRes.json();
+          const s = await sRes.json();
+          renderRows(m.messages || []);
+          document.getElementById('lbl-result-count').textContent = `表示中: ${(m.messages || []).length}件 / 該当 ${m.total ?? 0}件`;
+          document.getElementById('stat-total').textContent = s.total ?? 0;
+          document.getElementById('stat-ok').textContent = s.okCount ?? 0;
+          document.getElementById('stat-failed').textContent = s.failedCount ?? 0;
+          document.getElementById('stat-24h').textContent = s.last24h ?? 0;
+          document.getElementById('stat-last').textContent = s.lastMessageAt ? formatJst(s.lastMessageAt).slice(5, 16) : '--';
+        } catch (e) {
+          console.error('load failed', e);
+          const tbody = document.getElementById('msg-tbody');
+          const tr = el('tr');
+          const td = el('td', 'text-center py-8 text-crimson-err text-xs', `送信履歴を読み込めませんでした: ${String(e)}`);
+          td.colSpan = 7;
+          tr.appendChild(td);
+          tbody.replaceChildren(tr);
+          document.getElementById('lbl-result-count').textContent = '読み込みに失敗しました';
+        }
+        countdown = 30;
+      }
+
+      async function triggerSlackTest() {
+        const btn = document.getElementById('btn-slack-test');
+        btn.disabled = true;
+        btn.textContent = '送信中...';
+        try {
+          const res = await fetch('api/test-slack', { method: 'POST' });
+          const { traceId, error } = await res.json();
+          if (!res.ok) throw new Error(error || `HTTP ${res.status}`);
+          // Worker が処理して履歴に記録するまで最大6秒待つ
+          let found = null;
+          for (let i = 0; i < 6 && !found; i++) {
+            await new Promise((r) => setTimeout(r, 1000));
+            const r = await fetch('api/messages?limit=1&keyword=' + encodeURIComponent(traceId));
+            found = (await r.json()).messages?.[0] ?? null;
+          }
+          await loadData();
+          if (!found) alert('テストメッセージをキューに投入しましたが、Worker の処理が確認できませんでした');
+          else if (found.ok) alert('Slackテスト通知を送信しました');
+          else alert('Slack送信に失敗しました: ' + (found.error || 'unknown'));
+        } catch (err) {
+          alert('Slackテスト中にエラー: ' + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-[15px]">send</span><span>テスト</span>';
+        }
+      }
+
+      setInterval(() => {
+        countdown--;
+        if (countdown <= 0) loadData();
+      }, 1000);
+      loadData();
+    </script>
+  </body>
+</html>

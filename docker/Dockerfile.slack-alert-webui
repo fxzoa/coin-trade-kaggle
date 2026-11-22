@@ -1,0 +1,19 @@
+FROM denoland/deno:alpine-2.9.5
+
+WORKDIR /app
+
+ENV DENO_DIR=/app/.cache/deno
+ENV PORT=8010
+
+COPY deno.json ./
+COPY src/ ./src/
+
+RUN mkdir -p /app/data /app/.cache/deno && \
+    deno cache --unstable-kv --allow-import src/slack_alert_webui/webui/main.ts && \
+    chown -R deno:deno /app
+
+USER deno
+
+EXPOSE 8010
+
+CMD ["run", "--allow-net", "--allow-env", "--allow-read", "--allow-write", "--allow-ffi", "src/slack_alert_webui/webui/main.ts"]

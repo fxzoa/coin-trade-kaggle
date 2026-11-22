@@ -1,0 +1,22 @@
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+kaggle.json
+kaggle/
+
+# SQLite Data directory
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Cache / Temp
+.cache/
+tmp/
+
+# Per-process environment secrets
+conf/*/.env

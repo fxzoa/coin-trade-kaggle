@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html class="dark" lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>BTC Grid Trader Dashboard | Hyperliquid DEX</title>
+    <meta
+      name="description"
+      content="Hyperliquid DEX 上で稼働する自律型 BTC 節目グリッドトレードボットのリアルタイム運用監視ダッシュボード"
+    />
+    <meta name="theme-color" content="#0B0F17" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "obsidian": "#0B0F17",
+              "surface-1": "#131926",
+              "surface-2": "#1A2234",
+              "border-base": "#1E293B",
+              "border-elevated": "#334155",
+              "telemetry": "#38BDF8",
+              "emerald-ok": "#10B981",
+              "crimson-err": "#F43F5E",
+              "amber-warn": "#F59E0B",
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              mono: ["JetBrains Mono", "monospace"],
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="bg-obsidian text-slate-100 font-sans antialiased selection:bg-telemetry/30 selection:text-telemetry min-h-screen flex flex-col">
+    <!-- Top Navigation Header -->
+    <header class="sticky top-0 z-20 h-14 px-4 sm:px-6 border-b border-border-base bg-[#0E131F]/95 backdrop-blur flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded bg-telemetry/10 border border-telemetry/30 flex items-center justify-center text-telemetry shadow-[0_0_12px_-2px_rgba(56,189,248,0.3)] font-mono font-bold text-sm">
+          ₿
+        </div>
+        <div class="flex flex-col">
+          <h1 class="text-sm font-bold tracking-tight text-white leading-tight">BTC Grid Trader</h1>
+          <span class="text-[10px] font-mono uppercase tracking-widest text-telemetry">Hyperliquid DEX</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5">
+        <!-- BOT トグルボタン -->
+        <button
+          id="btnBotToggle"
+          class="px-2.5 py-1 rounded text-[11px] font-mono font-bold cursor-pointer border border-emerald-ok/40 bg-emerald-ok/15 text-emerald-ok flex items-center gap-1.5 transition-colors hover:bg-emerald-ok/25"
+          title="BOT稼働切り替え"
+        >
+          <span id="botToggleDot" class="w-1.5 h-1.5 rounded-full bg-emerald-ok"></span>
+          <span id="botToggleText">BOT</span>
+        </button>
+
+        <!-- LIVE 接続ステータスバッジ -->
+        <div
+          class="px-2.5 py-1 rounded bg-surface-1 border border-border-base flex items-center gap-1.5"
+          id="sseStatusPill"
+          title="リアルタイム配信"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-telemetry shadow-[0_0_6px_#38BDF8]"
+            id="sseStatusDot"
+          ></span>
+          <span id="sseStatusText" class="text-telemetry font-mono font-semibold text-[11px]">LIVE</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 py-5 flex flex-col gap-5">
+      <!-- Stat Cards Overview Grid -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Key Performance Indicators">
+        <!-- Card 1: BTC Mark Price -->
+        <div class="bg-surface-1 border border-border-base rounded-lg p-4 flex flex-col justify-between gap-3 hover:border-border-elevated transition-colors">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[16px] text-amber-warn">currency_bitcoin</span>
+              BTC マーク価格
+            </span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-warn/10 text-amber-warn border border-amber-warn/20">
+              BTC / USD
+            </span>
+          </div>
+          <div class="flex items-baseline justify-between gap-2">
+            <div class="text-2xl font-mono font-bold tracking-tight text-white tabular-nums" id="statPrice">$ --</div>
+            <div class="text-xs font-mono" id="statPriceChange">
+              <span class="change-tag neutral">--%</span>
+            </div>
+          </div>
+          <div class="pt-2 border-t border-border-base/70 text-[11px] font-mono text-slate-400 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[14px] text-telemetry">sensors</span>
+            <span id="statPriceSource">WSリアルタイム</span>
+          </div>
+        </div>
+
+        <!-- Card 2: Current Position & Unrealized PnL -->
+        <div class="bg-surface-1 border border-border-base rounded-lg p-4 flex flex-col justify-between gap-3 hover:border-border-elevated transition-colors">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[16px] text-telemetry">account_balance_wallet</span>
+              保有ポジション
+            </span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-ok/10 text-emerald-ok border border-emerald-ok/20" id="statPositionSide">
+              LONG
+            </span>
+          </div>
+          <div class="flex items-baseline justify-between gap-2">
+            <div class="text-2xl font-mono font-bold tracking-tight text-white tabular-nums" id="statPositionSize">
+              0.00 <span class="text-xs font-normal text-slate-400">BTC</span>
+            </div>
+            <div class="text-xs font-mono" id="statUnrealizedPnl">
+              <span class="pnl-val neutral">$0 (0.0%)</span>
+            </div>
+          </div>
+          <div class="pt-2 border-t border-border-base/70 text-[11px] font-mono text-slate-400 flex items-center gap-2">
+            <span>建値: <strong class="text-slate-200" id="statEntryPrice">$ --</strong></span>
+            <span class="text-slate-600">|</span>
+            <span>元本: <strong class="text-slate-200" id="statNotionalUsd">$0</strong></span>
+          </div>
+        </div>
+
+        <!-- Card 3: Active Grid Orders -->
+        <div class="bg-surface-1 border border-border-base rounded-lg p-4 flex flex-col justify-between gap-3 hover:border-border-elevated transition-colors">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[16px] text-telemetry">grid_on</span>
+              未約定 節目指値
+            </span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-telemetry/10 text-telemetry border border-telemetry/20" id="statGridConfigBadge">
+              Step $1,000
+            </span>
+          </div>
+          <div class="flex items-baseline justify-between gap-2">
+            <div class="text-2xl font-mono font-bold tracking-tight text-white tabular-nums" id="statActiveOrdersCount">
+              0 <span class="text-xs font-normal text-slate-400">件</span>
+            </div>
+            <div class="text-xs font-mono text-slate-300" id="statGridOrderSize">
+              <strong>$2,000</strong>
+            </div>
+          </div>
+          <div class="pt-2 border-t border-border-base/70 text-[11px] font-mono text-slate-400 flex items-center gap-2">
+            <span>判定: <strong class="text-slate-200" id="statLastAction">KEEP</strong></span>
+            <span class="text-slate-600">|</span>
+            <span>目標: <strong class="text-slate-200" id="statNextTargetLevel">$ --</strong></span>
+          </div>
+        </div>
+
+        <!-- Card 4: Realized PnL / Fills Summary -->
+        <div class="bg-surface-1 border border-border-base rounded-lg p-4 flex flex-col justify-between gap-3 hover:border-border-elevated transition-colors">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[16px] text-emerald-ok">trending_up</span>
+              実現損益 (TP)
+            </span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-surface-2 text-slate-300 border border-border-base">
+              累計
+            </span>
+          </div>
+          <div class="flex items-baseline justify-between gap-2">
+            <div class="text-2xl font-mono font-bold tracking-tight text-white tabular-nums" id="statTotalRealizedPnl">
+              $0.00
+            </div>
+            <div class="text-xs font-mono text-slate-400" id="statFillsSummary">
+              約定: <strong class="text-slate-200" id="statFillsCount">0</strong>件
+            </div>
+          </div>
+          <div class="pt-2 border-t border-border-base/70 text-[11px] font-mono text-slate-400 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[14px] text-slate-500">schedule</span>
+            <span>スキャン: <span class="text-slate-300" id="statLastScanTime">--</span></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Content Area: Tables & Detail Panels -->
+      <main class="flex-1 flex flex-col">
+        <section class="bg-surface-1 border border-border-base rounded-lg overflow-hidden flex flex-col">
+          <div class="px-4 py-3 border-b border-border-base bg-[#0E131F] flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <div class="flex items-center gap-1 bg-obsidian p-1 rounded border border-border-base">
+                <button
+                  type="button"
+                  id="tabOrdersBtn"
+                  class="tab-btn active px-3 py-1 rounded text-xs font-mono font-semibold cursor-pointer border-0 transition-colors"
+                  style="background: #00e599; color: #0b0e14;"
+                >
+                  📋 アクティブ 節目注文 (<span id="activeOrdersBadge">0</span>)
+                </button>
+                <button
+                  type="button"
+                  id="tabErrorsBtn"
+                  class="tab-btn px-3 py-1 rounded text-xs font-mono font-semibold cursor-pointer border-0 transition-colors"
+                  style="background: transparent; color: #f43f5e;"
+                >
+                  🚨 エラーログ (<span id="activeErrorsBadge">0</span>)
+                </button>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-400" id="panelLegendOrders">
+              <span class="w-2 h-2 rounded-full bg-emerald-ok inline-block"></span>
+              <span>Buy Limit (節目指値)</span>
+            </div>
+
+            <div class="items-center gap-2" id="panelControlsErrors" style="display: none;">
+              <button
+                id="refreshErrorsBtn"
+                class="px-2.5 py-1 rounded text-xs font-mono bg-surface-2 text-slate-200 border border-border-elevated hover:bg-border-base cursor-pointer transition-colors"
+              >
+                🔄 再読込
+              </button>
+              <button
+                id="clearErrorsBtn"
+                class="px-2.5 py-1 rounded text-xs font-mono bg-crimson-err/15 text-crimson-err border border-crimson-err/40 hover:bg-crimson-err/25 cursor-pointer transition-colors"
+              >
+                🗑️ ログ消去
+              </button>
+            </div>
+          </div>
+
+          <!-- Tab 1: Orders Panel -->
+          <div id="ordersPanelContent">
+            <div class="overflow-x-auto">
+              <table class="data-table w-full text-left border-collapse" id="ordersTable">
+                <thead>
+                  <tr class="border-b border-border-base bg-surface-2/60 text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                    <th class="px-4 py-2.5 font-semibold">節目レベル</th>
+                    <th class="px-4 py-2.5 font-semibold">発注価格 (USD)</th>
+                    <th class="px-4 py-2.5 font-semibold">数量 (BTC)</th>
+                    <th class="px-4 py-2.5 font-semibold">想定額 (USD)</th>
+                    <th class="px-4 py-2.5 font-semibold">ステータス</th>
+                    <th class="px-4 py-2.5 font-semibold">注文識別子 (CLOID)</th>
+                    <th class="px-4 py-2.5 font-semibold">発注日時 (JST)</th>
+                    <th class="px-4 py-2.5 font-semibold text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="ordersTableBody" class="divide-y divide-border-base/60 text-xs font-mono">
+                  <tr class="empty-row">
+                    <td colspan="8" class="px-4 py-8 text-center text-slate-500">
+                      未約定の節目指値データを読み込み中...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tab 2: Error Logs Panel -->
+          <div id="errorsPanelContent" style="display: none;">
+            <div class="overflow-x-auto">
+              <table class="data-table w-full text-left border-collapse" id="errorsTable">
+                <thead>
+                  <tr class="border-b border-border-base bg-surface-2/60 text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                    <th class="px-4 py-2.5 font-semibold w-[170px]">発生日時 (JST)</th>
+                    <th class="px-4 py-2.5 font-semibold w-[120px]">サービス</th>
+                    <th class="px-4 py-2.5 font-semibold w-[130px]">コンテキスト</th>
+                    <th class="px-4 py-2.5 font-semibold">エラー詳細・メッセージ</th>
+                  </tr>
+                </thead>
+                <tbody id="errorsTableBody" class="divide-y divide-border-base/60 text-xs font-mono">
+                  <tr class="empty-row">
+                    <td colspan="4" class="px-4 py-8 text-center text-slate-500">
+                      現在記録されたエラーログはありません (正常稼働中)
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-border-base bg-[#0E131F] px-4 sm:px-6 py-3 text-[11px] font-mono text-slate-400">
+      <div class="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="conn-dot online" id="connIndicator"></span>
+          <span id="connText">REST API / Deno KV 接続良好</span>
+        </div>
+        <div class="flex items-center gap-2 text-slate-500">
+          <span>タイムゾーン: Asia/Tokyo (JST)</span>
+          <span>•</span>
+          <span>Hyperliquid Arbitrum L1/L2</span>
+        </div>
+        <div class="text-slate-500">
+          <span>btc-grid-deno v1.0.0</span>
+        </div>
+      </div>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

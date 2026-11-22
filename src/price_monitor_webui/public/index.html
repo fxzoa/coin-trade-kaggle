@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>Price Syncer Bot Dashboard</title>
+    <!-- Google Fonts: Inter, JetBrains Mono & Material Symbols Outlined -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet">
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "obsidian": "#0B0F17",
+            "surface-1": "#131926",
+            "surface-2": "#1A2234",
+            "border-base": "#1E293B",
+            "border-elevated": "#334155",
+            "telemetry": "#38BDF8",
+            "emerald-ok": "#10B981",
+            "crimson-err": "#F43F5E",
+            "amber-warn": "#F59E0B",
+          },
+          fontFamily: {
+            sans: ["Inter", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+          },
+        },
+      },
+    };
+    </script>
+    <style>
+    body {
+      background-color: #0b0f17;
+      color: #f1f5f9;
+      font-size: 1rem;
+    }
+    .badge-buy {
+      background-color: rgba(16, 185, 129, 0.12);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge-sell {
+      background-color: rgba(244, 63, 94, 0.12);
+      color: #f43f5e;
+      border: 1px solid rgba(244, 63, 94, 0.3);
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .scrollbar-thin::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-track {
+      background: #0b0f17;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 3px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+    </style>
+  </head>
+  <body class="h-screen flex flex-col bg-obsidian text-slate-100 font-sans antialiased selection:bg-telemetry/30 selection:text-telemetry overflow-hidden">
+    <!-- Header -->
+    <header
+      class="border-b border-border-base bg-[#0E131F] px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 shrink-0 z-30">
+      <div class="flex items-center space-x-2.5">
+        <div
+          class="w-7 h-7 rounded bg-telemetry/10 border border-telemetry/30 flex items-center justify-center text-telemetry shadow-[0_0_12px_-2px_rgba(56,189,248,0.3)]">
+          <span class="material-symbols-outlined text-[18px]">bolt</span>
+        </div>
+        <div class="flex flex-col">
+          <h1 class="text-sm font-bold tracking-tight text-white leading-tight">
+            Price Syncer Bot
+          </h1>
+          <span class="text-[9px] font-mono uppercase tracking-widest text-telemetry">Obsidian Telemetry</span>
+        </div>
+      </div>
+
+      <!-- User Address Input & Connection Status -->
+      <div class="flex items-center gap-2">
+        <div
+          class="flex items-center bg-surface-1 rounded px-2 py-0.5 border border-border-base text-xs focus-within:border-telemetry/60 transition-colors">
+          <label for="userInput"
+            class="text-slate-400 text-[10px] mr-1.5 font-mono">アドレス:</label>
+          <input
+            id="userInput"
+            type="text"
+            placeholder="0x..."
+            class="bg-transparent border-none p-0 text-slate-100 focus:outline-none focus:ring-0 font-mono text-[11px] w-52 md:w-72"
+          />
+          <button id="applyUserBtn"
+            class="ml-1.5 px-2 py-0.5 bg-telemetry/15 hover:bg-telemetry/25 text-telemetry border border-telemetry/30 rounded text-[11px] font-medium transition">
+          切替
+        </button>
+        </div>
+
+        <!-- LIVE Connection Status -->
+        <div id="sseStatusBadge"
+          class="flex items-center space-x-1.5 bg-surface-1 border border-border-base px-2.5 py-1 rounded text-xs font-medium"
+          title="リアルタイム配信">
+          <span id="sseStatusDot"
+            class="w-1.5 h-1.5 rounded-full bg-telemetry shadow-[0_0_6px_#38BDF8] animate-pulse"></span>
+          <span id="sseStatusText"
+            class="text-telemetry font-mono font-semibold text-[11px]">LIVE</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 p-1.5 space-y-1.5 w-full mx-auto flex flex-col min-h-0 overflow-hidden">
+      <!-- Stat Overview Cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 shrink-0">
+        <div
+          class="bg-surface-1 border border-border-base rounded px-3 py-2 flex flex-col justify-between">
+          <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 leading-none">監視対象銘柄数</div>
+          <div
+            class="mt-1 text-base font-bold font-mono text-white flex items-baseline gap-1 leading-tight">
+            <span id="statPricesCount">0</span>
+            <span class="text-[10px] font-sans font-normal text-slate-500">銘柄</span>
+          </div>
+          <div
+            class="text-[9px] text-slate-500 font-mono truncate leading-none pt-1 mt-1 border-t border-border-base/60"
+            id="statPricesUpdated">最終更新: --</div>
+        </div>
+
+        <div
+          class="bg-surface-1 border border-border-base rounded px-3 py-2 flex flex-col justify-between">
+          <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 leading-none">保有ポジション</div>
+          <div
+            class="mt-1 text-base font-bold font-mono text-white flex items-baseline gap-1 leading-tight">
+            <span id="statPositionsCount">0</span>
+            <span class="text-[10px] font-sans font-normal text-slate-500">件</span>
+          </div>
+          <div
+            class="text-[9px] text-slate-500 font-mono truncate leading-none pt-1 mt-1 border-t border-border-base/60"
+            id="statTotalPnl">未実現損益: --</div>
+        </div>
+
+        <div
+          class="bg-surface-1 border border-border-base rounded px-3 py-2 flex flex-col justify-between">
+          <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 leading-none">未約定注文</div>
+          <div
+            class="mt-1 text-base font-bold font-mono text-white flex items-baseline gap-1 leading-tight">
+            <span id="statOrdersCount">0</span>
+            <span class="text-[10px] font-sans font-normal text-slate-500">件</span>
+          </div>
+          <div
+            class="text-[9px] text-slate-500 font-mono truncate leading-none pt-1 mt-1 border-t border-border-base/60"
+            id="statOrdersUpdated">最終更新: --</div>
+        </div>
+
+        <div
+          class="bg-surface-1 border border-border-base rounded px-3 py-2 flex flex-col justify-between">
+          <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 leading-none">直近約定履歴 (Fills)</div>
+          <div
+            class="mt-1 text-base font-bold font-mono text-white flex items-baseline gap-1 leading-tight">
+            <span id="statFillsCount">0</span>
+            <span class="text-[10px] font-sans font-normal text-slate-500">件記録</span>
+          </div>
+          <div
+            class="text-[9px] text-slate-500 font-mono truncate leading-none pt-1 mt-1 border-t border-border-base/60"
+            id="statFillsUpdated">最終約定: --</div>
+        </div>
+      </div>
+
+      <!-- Main Grid: Left (Tables) & Right (Prices Sidebar) -->
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-1.5 flex-1 min-h-0 overflow-hidden">
+        <!-- Left Column: Tabs for Positions, Orders, Fills (col-span-3) -->
+        <div class="lg:col-span-3 flex flex-col min-h-0 overflow-hidden">
+          <div
+            class="bg-surface-1 border border-border-base rounded flex flex-col h-full min-h-0 overflow-hidden">
+            <!-- Tab Navigation -->
+            <div class="flex border-b border-border-base bg-[#0E131F] px-2 pt-1 gap-1 shrink-0">
+              <button id="tabPositionsBtn"
+                class="tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-t border-b-2 border-telemetry text-telemetry bg-surface-1 leading-tight flex items-center gap-1">
+              ポジション (<span id="tabPositionsCount">0</span>)
+            </button>
+              <button id="tabOrdersBtn"
+                class="tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-t border-b-2 border-transparent text-slate-400 hover:text-slate-200 leading-tight flex items-center gap-1">
+              未約定注文 (<span id="tabOrdersCount">0</span>)
+            </button>
+              <button id="tabFillsBtn"
+                class="tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-t border-b-2 border-transparent text-slate-400 hover:text-slate-200 leading-tight flex items-center gap-1">
+              約定履歴 (<span id="tabFillsCount">0</span>)
+            </button>
+              <button id="tabErrorsBtn"
+                class="tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-t border-b-2 border-transparent text-crimson-err hover:text-rose-300 leading-tight flex items-center gap-1">
+              <span class="material-symbols-outlined text-[14px]">error</span>
+              <span>エラーログ</span> (<span id="tabErrorsCount">0</span>)
+            </button>
+            </div>
+
+            <!-- Tab Content 1: Positions -->
+            <div id="tabPositionsContent" class="flex-1 min-h-0 overflow-auto scrollbar-thin p-1.5">
+              <table class="w-full text-left text-[11px] font-mono leading-tight">
+                <thead
+                  class="text-slate-400 uppercase bg-surface-2/80 border-b border-border-base sticky top-0 z-10">
+                  <tr>
+                    <th class="px-2 py-1.5">銘柄</th>
+                    <th class="px-2 py-1.5">数量</th>
+                    <th class="px-2 py-1.5">参入価格</th>
+                    <th class="px-2 py-1.5">現在価格</th>
+                    <th class="px-2 py-1.5">ポジション評価額</th>
+                    <th class="px-2 py-1.5">未実現損益 (ROE)</th>
+                    <th class="px-2 py-1.5">清算価格</th>
+                    <th class="px-2 py-1.5">使用証拠金</th>
+                  </tr>
+                </thead>
+                <tbody id="positionsTableBody" class="divide-y divide-border-base/60">
+                  <tr>
+                    <td colspan="8"
+                      class="text-center py-6 text-slate-500">保有中のポジションはありません</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Tab Content 2: Open Orders -->
+            <div id="tabOrdersContent"
+              class="flex-1 min-h-0 overflow-auto scrollbar-thin p-1.5 hidden">
+              <table class="w-full text-left text-[11px] font-mono leading-tight">
+                <thead
+                  class="text-slate-400 uppercase bg-surface-2/80 border-b border-border-base sticky top-0 z-10">
+                  <tr>
+                    <th class="px-2 py-1.5">OID</th>
+                    <th class="px-2 py-1.5">日時</th>
+                    <th class="px-2 py-1.5">銘柄</th>
+                    <th class="px-2 py-1.5">売買</th>
+                    <th class="px-2 py-1.5">指値価格</th>
+                    <th class="px-2 py-1.5">残数量 / 元数量</th>
+                    <th class="px-2 py-1.5">状態</th>
+                  </tr>
+                </thead>
+                <tbody id="ordersTableBody" class="divide-y divide-border-base/60">
+                  <tr>
+                    <td colspan="7"
+                      class="text-center py-6 text-slate-500">有効な注文はありません</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Tab Content 3: Trade History (Fills) -->
+            <div id="tabFillsContent"
+              class="flex-1 min-h-0 overflow-auto scrollbar-thin p-1.5 hidden">
+              <table class="w-full text-left text-[11px] font-mono leading-tight">
+                <thead
+                  class="text-slate-400 uppercase bg-surface-2/80 border-b border-border-base sticky top-0 z-10">
+                  <tr>
+                    <th class="px-2 py-1.5">日時</th>
+                    <th class="px-2 py-1.5">銘柄</th>
+                    <th class="px-2 py-1.5">売買</th>
+                    <th class="px-2 py-1.5">約定価格</th>
+                    <th class="px-2 py-1.5">数量</th>
+                    <th class="px-2 py-1.5">手数料</th>
+                    <th class="px-2 py-1.5">実現損益</th>
+                    <th class="px-2 py-1.5">Tx Hash</th>
+                  </tr>
+                </thead>
+                <tbody id="fillsTableBody" class="divide-y divide-border-base/60">
+                  <tr>
+                    <td colspan="8"
+                      class="text-center py-6 text-slate-500">約定履歴はありません</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Tab Content 4: Error Logs -->
+            <div id="tabErrorsContent"
+              class="flex-1 min-h-0 overflow-auto scrollbar-thin p-1.5 hidden flex flex-col">
+              <div
+                class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-border-base text-[11px]">
+                <span class="text-crimson-err font-bold flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[15px]">error</span>
+                  <span>直近エラーログ一覧 (最新100件)</span>
+                </span>
+                <div class="flex items-center gap-2">
+                  <button id="refreshErrorsBtn"
+                    class="px-2 py-0.5 bg-surface-2 hover:bg-border-elevated text-slate-200 border border-border-base rounded text-[10px] font-medium transition flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[13px]">refresh</span>
+                    <span>再読込</span>
+                  </button>
+                  <button id="clearErrorsBtn"
+                    class="px-2 py-0.5 bg-crimson-err/10 hover:bg-crimson-err/20 text-crimson-err border border-crimson-err/30 rounded text-[10px] font-medium transition flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[13px]">delete</span>
+                    <span>ログ消去</span>
+                  </button>
+                </div>
+              </div>
+              <div class="flex-1 overflow-auto">
+                <table class="w-full text-left text-[11px] font-mono leading-tight">
+                  <thead
+                    class="text-slate-400 uppercase bg-surface-2/80 border-b border-border-base sticky top-0 z-10">
+                    <tr>
+                      <th class="px-2 py-1.5 w-36">発生日時 (JST)</th>
+                      <th class="px-2 py-1.5 w-24">サービス</th>
+                      <th class="px-2 py-1.5 w-28">コンテキスト</th>
+                      <th class="px-2 py-1.5">エラー詳細・メッセージ</th>
+                    </tr>
+                  </thead>
+                  <tbody id="errorsTableBody" class="divide-y divide-border-base/60">
+                    <tr>
+                      <td colspan="4"
+                        class="text-center py-6 text-slate-500">現在記録されたエラーログはありません (正常稼働中)</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Market Prices (col-span-1) -->
+        <div class="lg:col-span-1 flex flex-col min-h-0 overflow-hidden">
+          <div
+            class="bg-surface-1 border border-border-base rounded flex flex-col h-full min-h-0 overflow-hidden">
+            <div
+              class="px-2.5 py-1.5 border-b border-border-base flex items-center justify-between bg-[#0E131F] shrink-0">
+              <h2 class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <span>リアルタイム価格</span>
+                <span id="pricesPillCount"
+                  class="px-1.5 py-0.5 rounded bg-surface-2 border border-border-base font-mono text-[9px] text-telemetry">0</span>
+              </h2>
+              <input
+                id="searchPriceInput"
+                type="text"
+                placeholder="銘柄検索..."
+                class="w-24 px-2 py-0.5 bg-surface-2 border border-border-base rounded text-[11px] text-slate-100 focus:outline-none focus:border-telemetry focus:ring-0"
+              />
+            </div>
+            <div class="overflow-y-auto flex-1 min-h-0 scrollbar-thin p-1.5">
+              <table class="w-full text-left text-[11px] font-mono leading-tight">
+                <thead
+                  class="text-slate-400 uppercase bg-surface-2/80 border-b border-border-base sticky top-0 z-10">
+                  <tr>
+                    <th class="px-2 py-1.5">銘柄</th>
+                    <th class="px-2 py-1.5 text-right">仲値 (Mid)</th>
+                  </tr>
+                </thead>
+                <tbody id="pricesTableBody" class="divide-y divide-border-base/40">
+                  <tr>
+                    <td colspan="2" class="text-center py-6 text-slate-500">価格読み込み中...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer
+      class="border-t border-border-base bg-[#0E131F] py-1 px-3 text-center text-[10px] font-mono text-slate-500 shrink-0">
+    Price Syncer Bot &bull; Deno &amp; Redis リアルタイム価格・注文同期キャッシュ基盤
+  </footer>
+
+    <!-- Application Logic -->
+    <script>
+    const state = {
+      user: "",
+      prices: {},
+      positions: [],
+      orders: [],
+      fills: [],
+      sseConnected: false,
+      searchQuery: "",
+    };
+
+    let eventSource = null;
+
+    // Element references
+    const userInput = document.getElementById("userInput");
+    const applyUserBtn = document.getElementById("applyUserBtn");
+    const sseStatusDot = document.getElementById("sseStatusDot");
+    const sseStatusText = document.getElementById("sseStatusText");
+
+    const tabPositionsBtn = document.getElementById("tabPositionsBtn");
+    const tabOrdersBtn = document.getElementById("tabOrdersBtn");
+    const tabFillsBtn = document.getElementById("tabFillsBtn");
+    const tabErrorsBtn = document.getElementById("tabErrorsBtn");
+
+    const tabPositionsContent = document.getElementById("tabPositionsContent");
+    const tabOrdersContent = document.getElementById("tabOrdersContent");
+    const tabFillsContent = document.getElementById("tabFillsContent");
+    const tabErrorsContent = document.getElementById("tabErrorsContent");
+
+    const positionsTableBody = document.getElementById("positionsTableBody");
+    const ordersTableBody = document.getElementById("ordersTableBody");
+    const fillsTableBody = document.getElementById("fillsTableBody");
+    const errorsTableBody = document.getElementById("errorsTableBody");
+    const pricesTableBody = document.getElementById("pricesTableBody");
+
+    const statPricesCount = document.getElementById("statPricesCount");
+    const statPricesUpdated = document.getElementById("statPricesUpdated");
+    const statPositionsCount = document.getElementById("statPositionsCount");
+    const statTotalPnl = document.getElementById("statTotalPnl");
+    const statOrdersCount = document.getElementById("statOrdersCount");
+    const statOrdersUpdated = document.getElementById("statOrdersUpdated");
+    const statFillsCount = document.getElementById("statFillsCount");
+    const statFillsUpdated = document.getElementById("statFillsUpdated");
+
+    const tabPositionsCount = document.getElementById("tabPositionsCount");
+    const tabOrdersCount = document.getElementById("tabOrdersCount");
+    const tabFillsCount = document.getElementById("tabFillsCount");
+    const tabErrorsCount = document.getElementById("tabErrorsCount");
+    const pricesPillCount = document.getElementById("pricesPillCount");
+    const searchPriceInput = document.getElementById("searchPriceInput");
+
+    const refreshErrorsBtn = document.getElementById("refreshErrorsBtn");
+    const clearErrorsBtn = document.getElementById("clearErrorsBtn");
+
+    // Number Formatters
+    const fmtUSD = (n, fractionDigits) => {
+      const num = parseFloat(n);
+      if (isNaN(num)) return "--";
+      const options = fractionDigits === undefined
+        ? { minimumFractionDigits: 2, maximumFractionDigits: 4 }
+        : { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits };
+      return num.toLocaleString("en-US", options);
+    };
+
+    const fmtQty = (n) => {
+      const num = parseFloat(n);
+      if (isNaN(num)) return "--";
+      return num.toLocaleString("en-US", { maximumFractionDigits: 4 });
+    };
+
+    const fmtTime = (ts) => {
+      if (!ts) return "--";
+      const d = new Date(Number(ts));
+      return d.toLocaleTimeString("ja-JP", { hour12: false }) + "." +
+        String(d.getMilliseconds()).padStart(3, "0");
+    };
+
+    // Tab Switching
+    function setTab(activeTab) {
+      const tabs = [
+        {
+          name: "positions",
+          btn: tabPositionsBtn,
+          content: tabPositionsContent,
+          activeColor: "border-telemetry text-telemetry",
+        },
+        {
+          name: "orders",
+          btn: tabOrdersBtn,
+          content: tabOrdersContent,
+          activeColor: "border-telemetry text-telemetry",
+        },
+        {
+          name: "fills",
+          btn: tabFillsBtn,
+          content: tabFillsContent,
+          activeColor: "border-telemetry text-telemetry",
+        },
+        {
+          name: "errors",
+          btn: tabErrorsBtn,
+          content: tabErrorsContent,
+          activeColor: "border-crimson-err text-crimson-err",
+        },
+      ];
+
+      tabs.forEach((t) => {
+        if (t.name === activeTab) {
+          t.btn.className =
+            `tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-t border-b-2 ${t.activeColor} bg-surface-1 leading-tight flex items-center gap-1`;
+          t.content.classList.remove("hidden");
+        } else {
+          t.btn.className =
+            "tab-btn px-2.5 py-1 text-[11px] font-semibold rounded-t border-b-2 border-transparent text-slate-400 hover:text-slate-200 leading-tight flex items-center gap-1";
+          t.content.classList.add("hidden");
+        }
+      });
+
+      if (activeTab === "errors") {
+        fetchErrors();
+      }
+    }
+
+    tabPositionsBtn.addEventListener("click", () => setTab("positions"));
+    tabOrdersBtn.addEventListener("click", () => setTab("orders"));
+    tabFillsBtn.addEventListener("click", () => setTab("fills"));
+    tabErrorsBtn.addEventListener("click", () => setTab("errors"));
+
+    // Search filter for prices
+    searchPriceInput.addEventListener("input", (e) => {
+      state.searchQuery = (e.target.value || "").trim().toUpperCase();
+      renderPrices();
+    });
+
+    // Render Methods
+    function renderPrices() {
+      const keys = Object.keys(state.prices).sort();
+      statPricesCount.textContent = keys.length;
+      pricesPillCount.textContent = keys.length;
+
+      const filtered = state.searchQuery
+        ? keys.filter((k) => k.toUpperCase().includes(state.searchQuery))
+        : keys;
+
+      if (filtered.length === 0) {
+        pricesTableBody.innerHTML =
+          `<tr><td colspan="2" class="text-center py-6 text-gray-500">No matching prices</td></tr>`;
+        return;
+      }
+
+      pricesTableBody.innerHTML = filtered.map((sym) => {
+        const px = state.prices[sym];
+        return `
+          <tr class="hover:bg-gray-800/40 transition-colors">
+            <td class="px-2 py-1 font-bold text-gray-300">${sym}</td>
+            <td class="px-2 py-1 text-right text-emerald-400 font-semibold">$${fmtUSD(px)}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function renderPositions() {
+      statPositionsCount.textContent = state.positions.length;
+      tabPositionsCount.textContent = state.positions.length;
+
+      let totalPnl = 0;
+      let hasValidPnl = false;
+
+      if (state.positions.length === 0) {
+        positionsTableBody.innerHTML =
+          `<tr><td colspan="8" class="text-center py-4 text-gray-500">No open positions</td></tr>`;
+        statTotalPnl.textContent = "Unrealized PnL: $0.00";
+        return;
+      }
+
+      positionsTableBody.innerHTML = state.positions.map((pos) => {
+        const szi = parseFloat(pos.szi || 0);
+        const isLong = szi >= 0;
+        const markPx = state.prices[pos.coin];
+        const uPnl = parseFloat(pos.unrealizedPnl || 0);
+        if (!isNaN(uPnl)) {
+          totalPnl += uPnl;
+          hasValidPnl = true;
+        }
+
+        const roe = pos.returnOnEquity ? (parseFloat(pos.returnOnEquity) * 100).toFixed(2) + "%" : "--";
+        const pnlClass = uPnl > 0 ? "text-emerald-400" : uPnl < 0 ? "text-rose-400" : "text-gray-400";
+        const sideBadge = isLong
+          ? `<span class="badge-buy text-[9px] px-1 py-0.2 rounded font-bold mr-1">LONG</span>`
+          : `<span class="badge-sell text-[9px] px-1 py-0.2 rounded font-bold mr-1">SHORT</span>`;
+
+        return `
+          <tr class="hover:bg-gray-800/40 transition-colors">
+            <td class="px-2 py-1 font-bold text-white flex items-center">
+              ${sideBadge} ${pos.coin}
+            </td>
+            <td class="px-2 py-1 font-semibold ${
+          isLong ? "text-emerald-400" : "text-rose-400"
+        }">${pos.szi}</td>
+            <td class="px-2 py-1 text-gray-300">$${fmtUSD(pos.entryPx)}</td>
+            <td class="px-2 py-1 text-gray-300">${markPx ? "$" + fmtUSD(markPx) : "--"}</td>
+            <td class="px-2 py-1 text-gray-300">$${fmtUSD(pos.positionValue)}</td>
+            <td class="px-2 py-1 ${pnlClass} font-semibold">
+              ${uPnl >= 0 ? "+" : ""}$${
+          fmtUSD(uPnl)
+        } <span class="text-[10px] opacity-80">(${roe})</span>
+            </td>
+            <td class="px-2 py-1 text-amber-400/80">${
+          pos.liquidationPx ? "$" + fmtUSD(pos.liquidationPx) : "None"
+        }</td>
+            <td class="px-2 py-1 text-gray-400">$${fmtUSD(pos.marginUsed)}</td>
+          </tr>
+        `;
+      }).join("");
+
+      if (hasValidPnl) {
+        const color = totalPnl >= 0 ? "text-emerald-400" : "text-rose-400";
+        statTotalPnl.innerHTML = `Unrealized PnL: <span class="${color} font-bold">${
+          totalPnl >= 0 ? "+" : ""
+        }$${fmtUSD(totalPnl)}</span>`;
+      }
+    }
+
+    function renderOrders() {
+      // 日時降順（新しい順）にソート
+      state.orders.sort((a, b) => {
+        const timeA = Number(a.order?.timestamp ?? a.timestamp ?? 0);
+        const timeB = Number(b.order?.timestamp ?? b.timestamp ?? 0);
+        return timeB - timeA;
+      });
+
+      statOrdersCount.textContent = state.orders.length;
+      tabOrdersCount.textContent = state.orders.length;
+
+      if (state.orders.length === 0) {
+        ordersTableBody.innerHTML =
+          `<tr><td colspan="7" class="text-center py-4 text-gray-500">No active orders</td></tr>`;
+        return;
+      }
+
+      ordersTableBody.innerHTML = state.orders.map((item) => {
+        const order = item.order || item;
+        const status = item.status || "open";
+        const isBuy = order.side === "B";
+        const sideBadge = isBuy
+          ? `<span class="badge-buy text-[9px] px-1 py-0.2 rounded font-bold">BUY</span>`
+          : `<span class="badge-sell text-[9px] px-1 py-0.2 rounded font-bold">SELL</span>`;
+
+        return `
+          <tr class="hover:bg-gray-800/40 transition-colors">
+            <td class="px-2 py-1 text-gray-400 text-[10px]">${order.oid}</td>
+            <td class="px-2 py-1 text-gray-400">${fmtTime(order.timestamp)}</td>
+            <td class="px-2 py-1 font-bold text-white">${order.coin}</td>
+            <td class="px-2 py-1">${sideBadge}</td>
+            <td class="px-2 py-1 text-emerald-400 font-semibold">$${fmtUSD(order.limitPx)}</td>
+            <td class="px-2 py-1 text-gray-300">${order.sz} <span class="text-gray-500">/ ${
+          order.origSz || order.sz
+        }</span></td>
+            <td class="px-2 py-1">
+              <span class="px-1.5 py-0.2 rounded text-[9px] uppercase font-bold bg-gray-800 text-gray-300 border border-gray-700">
+                ${status}
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function renderFills() {
+      // 日時降順（新しい順）にソート
+      state.fills.sort((a, b) => {
+        const timeA = Number(a.time ?? 0);
+        const timeB = Number(b.time ?? 0);
+        return timeB - timeA;
+      });
+
+      statFillsCount.textContent = state.fills.length;
+      tabFillsCount.textContent = state.fills.length;
+
+      if (state.fills.length === 0) {
+        fillsTableBody.innerHTML =
+          `<tr><td colspan="8" class="text-center py-4 text-gray-500">No fills recorded yet</td></tr>`;
+        return;
+      }
+
+      const latestTime = state.fills[0]?.time;
+      if (latestTime) {
+        statFillsUpdated.textContent = "Last fill: " + fmtTime(latestTime);
+      }
+
+      fillsTableBody.innerHTML = state.fills.map((fill) => {
+        const isBuy = fill.side === "B";
+        const sideBadge = isBuy
+          ? `<span class="badge-buy text-[9px] px-1 py-0.2 rounded font-bold">BUY</span>`
+          : `<span class="badge-sell text-[9px] px-1 py-0.2 rounded font-bold">SELL</span>`;
+        const pnl = parseFloat(fill.closedPnl || 0);
+        const fee = parseFloat(fill.fee || 0);
+        const feeText = Number.isFinite(fee) ? `-$${fmtUSD(Math.abs(fee), 1)}` : "$--";
+        const pnlText = pnl !== 0
+          ? `<span class="${
+            pnl > 0 ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"
+          }">${pnl > 0 ? "+" : ""}$${fmtUSD(pnl, 1)}</span>`
+          : `<span class="text-gray-500">$${fmtUSD(0, 1)}</span>`;
+
+        return `
+          <tr class="hover:bg-gray-800/40 transition-colors">
+            <td class="px-2 py-1 text-gray-400">${fmtTime(fill.time)}</td>
+            <td class="px-2 py-1 font-bold text-white">${fill.coin}</td>
+            <td class="px-2 py-1">${sideBadge}</td>
+            <td class="px-2 py-1 text-gray-200 font-medium">$${fmtUSD(fill.px)}</td>
+            <td class="px-2 py-1 text-gray-300 font-medium">${fmtQty(fill.sz)}</td>
+            <td class="px-2 py-1 text-gray-400">${feeText}</td>
+            <td class="px-2 py-1">${pnlText}</td>
+            <td class="px-2 py-1 text-gray-500 text-[9px] font-mono">
+              ${fill.hash ? fill.hash.slice(0, 8) + "..." : "--"}
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    // Data Fetching
+    async function fetchAllData() {
+      // 1. Status & Default User
+      try {
+        const res = await fetch("api/status");
+        const data = await res.json();
+        if (!state.user && data.defaultUser) {
+          state.user = data.defaultUser;
+          userInput.value = data.defaultUser;
+          initSSE();
+        }
+
+        // Redis バッジ更新
+        const rDot = document.getElementById("redisStatusDot");
+        // Redis / 残高ステータスは Dashboard 側に集約
+      } catch (e) {
+        console.error("Status fetch error:", e);
+      }
+
+      // 2. Prices
+      try {
+        const res = await fetch("api/prices");
+        const data = await res.json();
+        if (data.prices) {
+          state.prices = data.prices;
+          renderPrices();
+          if (data.updatedAt) {
+            statPricesUpdated.textContent = "Last update: " + fmtTime(data.updatedAt);
+          }
+        }
+      } catch (e) {
+        console.error("Prices fetch error:", e);
+      }
+
+      if (!state.user) return;
+
+      // 3. Positions
+      try {
+        const res = await fetch(`api/positions?user=${encodeURIComponent(state.user)}`);
+        const data = await res.json();
+        if (data.positions) {
+          state.positions = data.positions;
+          renderPositions();
+        }
+      } catch (e) {
+        console.error("Positions fetch error:", e);
+      }
+
+      // 4. Orders
+      try {
+        const res = await fetch(`api/orders?user=${encodeURIComponent(state.user)}`);
+        const data = await res.json();
+        if (data.orders) {
+          state.orders = data.orders;
+          renderOrders();
+          if (data.updatedAt) {
+            statOrdersUpdated.textContent = "Last update: " + fmtTime(data.updatedAt);
+          }
+        }
+      } catch (e) {
+        console.error("Orders fetch error:", e);
+      }
+
+      // 5. Fills
+      try {
+        const res = await fetch(`api/fills?user=${encodeURIComponent(state.user)}&limit=100`);
+        const data = await res.json();
+        if (data.fills) {
+          state.fills = data.fills;
+          renderFills();
+        }
+      } catch (e) {
+        console.error("Fills fetch error:", e);
+      }
+
+      // 6. Errors
+      await fetchErrors();
+    }
+
+    async function fetchErrors() {
+      try {
+        const res = await fetch("api/errors?limit=100");
+        const data = await res.json();
+        const errors = data.errors || [];
+        tabErrorsCount.textContent = errors.length;
+        renderErrors(errors);
+      } catch (e) {
+        console.error("Errors fetch error:", e);
+      }
+    }
+
+    function renderErrors(errors) {
+      if (!errors || errors.length === 0) {
+        errorsTableBody.innerHTML =
+          `<tr><td colspan="4" class="text-center py-6 text-gray-500">現在記録されたエラーログはありません (正常稼働中)</td></tr>`;
+        return;
+      }
+
+      errorsTableBody.innerHTML = errors.map((err) => {
+        const timeStr = err.timestamp
+          ? new Date(err.timestamp).toLocaleString("ja-JP", { hour12: false })
+          : "--";
+        const service = err.service || "bot";
+        const context = err.context || "General";
+        const msg = err.message || JSON.stringify(err);
+        const stack = err.stack
+          ? `<pre class="mt-1 text-[10px] text-rose-300/80 bg-black/40 p-1.5 rounded overflow-x-auto">${err.stack}</pre>`
+          : "";
+
+        return `
+          <tr class="hover:bg-rose-950/20 transition-colors border-b border-gray-800/40">
+            <td class="px-2 py-1.5 text-gray-400 font-mono text-[10px] whitespace-nowrap">${timeStr}</td>
+            <td class="px-2 py-1.5 font-bold text-gray-300 text-[10px]">${service}</td>
+            <td class="px-2 py-1.5 text-rose-400 font-semibold text-[10px]">${context}</td>
+            <td class="px-2 py-1.5 text-rose-200">
+              <div class="font-medium">${msg}</div>
+              ${stack}
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    if (refreshErrorsBtn) {
+      refreshErrorsBtn.addEventListener("click", () => fetchErrors());
+    }
+
+    if (clearErrorsBtn) {
+      clearErrorsBtn.addEventListener("click", async () => {
+        if (!confirm("エラーログを消去しますか？")) return;
+        try {
+          await fetch("api/errors", { method: "DELETE" });
+          await fetchErrors();
+        } catch (e) {
+          console.error("Failed to clear errors:", e);
+        }
+      });
+    }
+
+    // Setup SSE Stream
+    function initSSE() {
+      if (eventSource) {
+        eventSource.close();
+      }
+
+      const sseUrl = state.user ? `api/events?user=${encodeURIComponent(state.user)}` : `api/events`;
+
+      sseStatusDot.className = "w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse";
+      sseStatusText.textContent = "CONNECTING...";
+      sseStatusText.className = "text-amber-400 font-mono text-[11px]";
+
+      eventSource = new EventSource(sseUrl);
+
+      eventSource.addEventListener("connected", () => {
+        state.sseConnected = true;
+        sseStatusDot.className = "w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#22d3ee] animate-pulse";
+        sseStatusText.textContent = "LIVE";
+        sseStatusText.className = "text-cyan-400 font-mono font-semibold text-[11px]";
+      });
+
+      eventSource.addEventListener("prices", (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload.prices) {
+            Object.assign(state.prices, payload.prices);
+            renderPrices();
+            renderPositions(); // Update mark prices in positions
+            statPricesUpdated.textContent = "Last update: " + fmtTime(payload.timestamp || Date.now());
+          }
+        } catch (err) {
+          console.error("Error handling SSE prices:", err);
+        }
+      });
+
+      eventSource.addEventListener("positions", (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload.positions) {
+            state.positions = payload.positions;
+            renderPositions();
+          }
+        } catch (err) {
+          console.error("Error handling SSE positions:", err);
+        }
+      });
+
+      eventSource.addEventListener("orders", (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload.update) {
+            const upd = payload.update;
+            const oid = upd.order?.oid;
+            // Update or remove from open orders
+            if (["filled", "canceled", "rejected"].includes(upd.status)) {
+              state.orders = state.orders.filter((o) => (o.order ? o.order.oid : o.oid) !== oid);
+            } else {
+              const idx = state.orders.findIndex((o) => (o.order ? o.order.oid : o.oid) === oid);
+              if (idx >= 0) {
+                state.orders[idx] = upd;
+              } else {
+                state.orders.unshift(upd);
+              }
+            }
+            renderOrders();
+            statOrdersUpdated.textContent = "Last update: " + fmtTime(payload.timestamp || Date.now());
+          }
+        } catch (err) {
+          console.error("Error handling SSE orders:", err);
+        }
+      });
+
+      eventSource.addEventListener("fills", (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (Array.isArray(payload.fills)) {
+            // Prepend new fills
+            state.fills = [...payload.fills, ...state.fills].slice(0, 500);
+            renderFills();
+          }
+        } catch (err) {
+          console.error("Error handling SSE fills:", err);
+        }
+      });
+
+      eventSource.addEventListener("errors", () => {
+        fetchErrors();
+      });
+
+      eventSource.onerror = () => {
+        state.sseConnected = false;
+        sseStatusDot.className = "w-1.5 h-1.5 rounded-full bg-rose-500";
+        sseStatusText.textContent = "SSE OFF";
+        sseStatusText.className = "text-rose-400 font-mono text-[11px]";
+      };
+    }
+
+    // Apply User Switch
+    applyUserBtn.addEventListener("click", () => {
+      const val = userInput.value.trim().toLowerCase();
+      if (val) {
+        state.user = val;
+        fetchAllData();
+        initSSE();
+      }
+    });
+
+    userInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        applyUserBtn.click();
+      }
+    });
+
+    // Start
+    fetchAllData();
+    initSSE();
+    // Fallback polling for static tables if SSE drops
+    setInterval(() => {
+      if (!state.sseConnected) {
+        fetchAllData();
+      }
+    }, 10000);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+FROM denoland/deno:alpine-2.9.5
+
+WORKDIR /app
+
+ENV DENO_DIR=/app/.cache/deno
+ENV PORT=8008
+
+COPY deno.json ./
+COPY src/ ./src/
+
+RUN mkdir -p /app/data /app/.cache/deno && \
+    deno cache --unstable-kv --allow-import src/multi_dca_webui/webui/main.ts && \
+    chown -R deno:deno /app
+
+USER deno
+
+EXPOSE 8008
+
+CMD ["run", "--unstable-kv", "--allow-net", "--allow-read", "--allow-write", "--allow-env", "src/multi_dca_webui/webui/main.ts"]
