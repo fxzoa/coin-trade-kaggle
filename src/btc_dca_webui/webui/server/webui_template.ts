@@ -62,10 +62,10 @@ export function renderWebUI(): string {
     ::-webkit-scrollbar-thumb:hover { background: #334155; }
   </style>
 </head>
-<body class="min-h-screen bg-obsidian text-slate-100 flex flex-col font-sans antialiased selection:bg-telemetry/30 selection:text-telemetry p-2 sm:p-3 gap-2.5" x-data="dcaApp()" x-init="init()">
+<body class="min-h-screen bg-obsidian text-slate-100 flex flex-col font-sans antialiased selection:bg-telemetry/30 selection:text-telemetry p-1 gap-[4px]" x-data="dcaApp()" x-init="init()">
 
   <!-- ヘッダー -->
-  <header class="w-full bg-surface-1 border border-border-base rounded-lg px-3.5 py-2 flex items-center justify-between gap-2">
+  <header class="w-full bg-surface-1 border border-border-base rounded-lg px-2.5 py-1.5 sm:px-4 flex items-center justify-between gap-2">
     <!-- 左側: アイコン + タイトル -->
     <div class="flex items-center gap-2.5">
       <div class="w-7 h-7 rounded bg-telemetry/10 border border-telemetry/30 flex items-center justify-center text-telemetry shadow-[0_0_12px_-2px_rgba(56,189,248,0.3)]">
@@ -102,7 +102,7 @@ export function renderWebUI(): string {
   </header>
 
   <!-- メインコンテンツ -->
-  <main class="w-full space-y-3 flex-1">
+  <main class="w-full space-y-[4px] flex-1">
 
     <!-- 監視ステータスバー -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">

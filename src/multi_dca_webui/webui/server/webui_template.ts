@@ -62,10 +62,10 @@ export function renderWebUI(): string {
     ::-webkit-scrollbar-thumb:hover { background: #334155; }
   </style>
 </head>
-<body class="min-h-screen bg-obsidian text-slate-100 font-sans flex flex-col antialiased selection:bg-telemetry/30 selection:text-telemetry" x-data="dcaApp()" x-init="init()">
+<body class="min-h-screen bg-obsidian text-slate-100 font-sans flex flex-col antialiased selection:bg-telemetry/30 selection:text-telemetry p-1 gap-[4px]" x-data="dcaApp()" x-init="init()">
 
   <!-- ヘッダー -->
-  <header class="w-full bg-[#0E131F]/95 backdrop-blur-md border-b border-border-base px-3 py-2 sm:px-4 flex items-center justify-between gap-2 sticky top-0 z-20">
+  <header class="w-full bg-[#0E131F]/95 backdrop-blur-md border border-border-base rounded-lg px-2.5 py-1.5 sm:px-4 flex items-center justify-between gap-2 sticky top-0 z-20">
     <!-- 左側: アイコン + タイトル -->
     <div class="flex items-center gap-2.5 flex-wrap">
       <div class="w-7 h-7 rounded bg-telemetry/10 border border-telemetry/30 flex items-center justify-center text-telemetry shadow-[0_0_12px_-2px_rgba(56,189,248,0.3)] shrink-0">
@@ -145,7 +145,7 @@ export function renderWebUI(): string {
   </header>
 
   <!-- メインコンテンツ -->
-  <main class="w-full p-2 sm:p-3 space-y-3 flex-1">
+  <main class="w-full space-y-[4px] flex-1">
 
     <div x-show="currentTab === 'dca'" class="space-y-3">
     <!-- 監視ステータスバー -->
