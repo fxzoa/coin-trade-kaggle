@@ -171,12 +171,12 @@
         </header>
 
         <!-- ビューコンテナ -->
-        <div class="flex-1 overflow-y-auto p-6 relative">
+        <div class="flex-1 overflow-y-auto p-1 relative">
           <!-- 1. 全体サマリービュー -->
-          <div id="summary-view" class="view-panel active space-y-6 max-w-[1600px] mx-auto">
+          <div id="summary-view" class="view-panel active space-y-[4px] w-full max-w-full mx-auto">
             <!-- KPI メトリクスグリッド -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div class="bg-surface-1 border border-border-base rounded p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-[4px]">
+              <div class="bg-surface-1 border border-border-base rounded p-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
                 <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
                   <span>総ボット数</span>
                   <span class="material-symbols-outlined text-[16px] text-slate-500">dns</span>
@@ -184,7 +184,7 @@
                 <div id="val-total-bots" class="font-mono text-2xl font-semibold text-white tabular-nums">-</div>
               </div>
 
-              <div class="bg-surface-1 border border-border-base rounded p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+              <div class="bg-surface-1 border border-border-base rounded p-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
                 <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
                   <span>正常稼働中</span>
                   <span class="material-symbols-outlined text-[16px] text-emerald-ok">check_circle</span>
@@ -192,7 +192,7 @@
                 <div id="val-healthy-bots" class="font-mono text-2xl font-semibold text-emerald-ok tabular-nums">-</div>
               </div>
 
-              <div class="bg-surface-1 border border-border-base rounded p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+              <div class="bg-surface-1 border border-border-base rounded p-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
                 <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
                   <span>異常 / 停止中</span>
                   <span class="material-symbols-outlined text-[16px] text-crimson-err">error</span>
@@ -200,7 +200,7 @@
                 <div id="val-unhealthy-bots" class="font-mono text-2xl font-semibold text-crimson-err tabular-nums">-</div>
               </div>
 
-              <div class="bg-surface-1 border border-border-base rounded p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+              <div class="bg-surface-1 border border-border-base rounded p-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
                 <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
                   <span>最終チェック</span>
                   <span class="material-symbols-outlined text-[16px] text-telemetry">schedule</span>
@@ -210,7 +210,7 @@
             </div>
 
             <!-- セクションヘッダー & フィルタ -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
               <h2 class="text-sm font-semibold text-slate-200 tracking-tight flex items-center gap-2">
                 <span class="w-1 h-4 bg-telemetry rounded-full"></span>
                 <span>ボット一覧 & クイックアクセス</span>
@@ -236,7 +236,7 @@
             </div>
 
             <!-- ボットカードグリッド -->
-            <div id="bot-cards-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div id="bot-cards-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-[4px]">
               <!-- JSでカードを描画 -->
             </div>
           </div>
