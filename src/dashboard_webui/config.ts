@@ -78,6 +78,15 @@ export function parseConfig(
       healthEndpoint: "/health",
       directPort: 8004,
     },
+    {
+      key: "coin_trade",
+      name: "Coin Trade Monitor",
+      category: "Trading",
+      description: "Redis Pub/Sub 新規注文・決済注文リアルタイム履歴",
+      targetUrl: env.URL_COIN_TRADE_WEBUI || "http://localhost:8013",
+      healthEndpoint: "/api/health",
+      directPort: 8013,
+    },
 
     // === 基盤用BOT ===
     {
