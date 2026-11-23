@@ -696,94 +696,161 @@
       }).join("");
     }
 
+    // Corner Error Popup (non-blocking)
+    function showCornerError(title, message) {
+      let el = document.getElementById("corner-error-popup");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "corner-error-popup";
+        el.setAttribute("role", "alert");
+        el.style.cssText =
+          "position:fixed;top:12px;right:12px;z-index:9999;max-width:360px;min-width:260px;" +
+          "background:#131926;border:1px solid #F43F5E;border-radius:8px;padding:10px 12px;" +
+          "box-shadow:0 8px 24px rgba(0,0,0,0.55);color:#f1f5f9;font-family:Inter,sans-serif;font-size:12px;";
+        el.innerHTML =
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">' +
+            '<div style="min-width:0;flex:1;">' +
+              '<div id="corner-error-title" style="color:#F43F5E;font-weight:700;font-size:12px;line-height:1.3;"></div>' +
+              '<div id="corner-error-msg" style="color:#e2e8f0;font-size:11px;margin-top:4px;word-break:break-word;line-height:1.4;"></div>' +
+              '<div id="corner-error-time" style="color:#94a3b8;font-size:10px;font-family:JetBrains Mono,monospace;margin-top:6px;"></div>' +
+            '</div>' +
+            '<button id="corner-error-close" type="button" aria-label="閉じる" style="background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:16px;line-height:1;padding:0 2px;">&times;</button>' +
+          '</div>';
+        document.body.appendChild(el);
+        document.getElementById("corner-error-close").addEventListener("click", clearCornerError);
+      }
+      document.getElementById("corner-error-title").textContent = title || "データ異常";
+      document.getElementById("corner-error-msg").textContent = message || "不明なエラーが発生しました";
+      document.getElementById("corner-error-time").textContent = new Date().toLocaleTimeString("ja-JP", { hour12: false });
+      el.style.display = "block";
+    }
+
+    function clearCornerError() {
+      const el = document.getElementById("corner-error-popup");
+      if (el) el.style.display = "none";
+    }
+
     // Data Fetching
     async function fetchAllData() {
+      const fetchProblems = [];
+
       // 1. Status & Default User
       try {
         const res = await fetch("api/status");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+        if (!data || typeof data !== "object") {
+          throw new Error("レスポンス形式が不正です");
+        }
         if (!state.user && data.defaultUser) {
           state.user = data.defaultUser;
           userInput.value = data.defaultUser;
           initSSE();
         }
-
-        // Redis バッジ更新
-        const rDot = document.getElementById("redisStatusDot");
-        // Redis / 残高ステータスは Dashboard 側に集約
       } catch (e) {
         console.error("Status fetch error:", e);
+        fetchProblems.push(`api/status: ${e?.message || String(e)}`);
       }
 
       // 2. Prices
       try {
         const res = await fetch("api/prices");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (data.prices) {
-          state.prices = data.prices;
-          renderPrices();
-          if (data.updatedAt) {
-            statPricesUpdated.textContent = "Last update: " + fmtTime(data.updatedAt);
-          }
+        if (!data || !data.prices || typeof data.prices !== "object") {
+          throw new Error("価格データ (prices) が欠落しています");
+        }
+        state.prices = data.prices;
+        renderPrices();
+        if (data.updatedAt) {
+          statPricesUpdated.textContent = "Last update: " + fmtTime(data.updatedAt);
+        }
+        if (Object.keys(data.prices).length === 0) {
+          fetchProblems.push("api/prices: 監視対象の価格データが空です");
         }
       } catch (e) {
         console.error("Prices fetch error:", e);
+        fetchProblems.push(`api/prices: ${e?.message || String(e)}`);
       }
 
-      if (!state.user) return;
-
-      // 3. Positions
-      try {
-        const res = await fetch(`api/positions?user=${encodeURIComponent(state.user)}`);
-        const data = await res.json();
-        if (data.positions) {
+      if (state.user) {
+        // 3. Positions
+        try {
+          const res = await fetch(`api/positions?user=${encodeURIComponent(state.user)}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          if (!data || !Array.isArray(data.positions)) {
+            throw new Error("ポジションデータ (positions) の形式が不正です");
+          }
           state.positions = data.positions;
           renderPositions();
+        } catch (e) {
+          console.error("Positions fetch error:", e);
+          fetchProblems.push(`api/positions: ${e?.message || String(e)}`);
         }
-      } catch (e) {
-        console.error("Positions fetch error:", e);
-      }
 
-      // 4. Orders
-      try {
-        const res = await fetch(`api/orders?user=${encodeURIComponent(state.user)}`);
-        const data = await res.json();
-        if (data.orders) {
+        // 4. Orders
+        try {
+          const res = await fetch(`api/orders?user=${encodeURIComponent(state.user)}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          if (!data || !Array.isArray(data.orders)) {
+            throw new Error("注文データ (orders) の形式が不正です");
+          }
           state.orders = data.orders;
           renderOrders();
           if (data.updatedAt) {
             statOrdersUpdated.textContent = "Last update: " + fmtTime(data.updatedAt);
           }
+        } catch (e) {
+          console.error("Orders fetch error:", e);
+          fetchProblems.push(`api/orders: ${e?.message || String(e)}`);
         }
-      } catch (e) {
-        console.error("Orders fetch error:", e);
-      }
 
-      // 5. Fills
-      try {
-        const res = await fetch(`api/fills?user=${encodeURIComponent(state.user)}&limit=100`);
-        const data = await res.json();
-        if (data.fills) {
+        // 5. Fills
+        try {
+          const res = await fetch(`api/fills?user=${encodeURIComponent(state.user)}&limit=100`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          if (!data || !Array.isArray(data.fills)) {
+            throw new Error("約定履歴 (fills) の形式が不正です");
+          }
           state.fills = data.fills;
           renderFills();
+        } catch (e) {
+          console.error("Fills fetch error:", e);
+          fetchProblems.push(`api/fills: ${e?.message || String(e)}`);
         }
-      } catch (e) {
-        console.error("Fills fetch error:", e);
+
+        // 6. Errors
+        const errProblem = await fetchErrors(true);
+        if (errProblem) fetchProblems.push(errProblem);
       }
 
-      // 6. Errors
-      await fetchErrors();
+      if (fetchProblems.length > 0) {
+        showCornerError("データ取得異常", fetchProblems[0]);
+      } else if (state.sseConnected) {
+        clearCornerError();
+      }
     }
 
-    async function fetchErrors() {
+    async function fetchErrors(suppressPopup = false) {
       try {
         const res = await fetch("api/errors?limit=100");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        const errors = data.errors || [];
+        if (!data || !Array.isArray(data.errors)) {
+          throw new Error("エラーログ (errors) の形式が不正です");
+        }
+        const errors = data.errors;
         tabErrorsCount.textContent = errors.length;
         renderErrors(errors);
+        return null;
       } catch (e) {
         console.error("Errors fetch error:", e);
+        const msg = `api/errors: ${e?.message || String(e)}`;
+        if (!suppressPopup) showCornerError("エラーログ取得失敗", msg);
+        return msg;
       }
     }
 
@@ -827,10 +894,12 @@
       clearErrorsBtn.addEventListener("click", async () => {
         if (!confirm("エラーログを消去しますか？")) return;
         try {
-          await fetch("api/errors", { method: "DELETE" });
+          const res = await fetch("api/errors", { method: "DELETE" });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
           await fetchErrors();
         } catch (e) {
           console.error("Failed to clear errors:", e);
+          showCornerError("エラーログ消去失敗", e?.message || String(e));
         }
       });
     }
@@ -854,69 +923,83 @@
         sseStatusDot.className = "w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#22d3ee] animate-pulse";
         sseStatusText.textContent = "LIVE";
         sseStatusText.className = "text-cyan-400 font-mono font-semibold text-[11px]";
+        if (Object.keys(state.prices).length > 0) {
+          clearCornerError();
+        }
       });
 
       eventSource.addEventListener("prices", (e) => {
         try {
           const payload = JSON.parse(e.data);
-          if (payload.prices) {
-            Object.assign(state.prices, payload.prices);
-            renderPrices();
-            renderPositions(); // Update mark prices in positions
-            statPricesUpdated.textContent = "Last update: " + fmtTime(payload.timestamp || Date.now());
+          if (!payload || !payload.prices || typeof payload.prices !== "object") {
+            throw new Error("SSE prices ペイロードが不正です");
+          }
+          Object.assign(state.prices, payload.prices);
+          renderPrices();
+          renderPositions(); // Update mark prices in positions
+          statPricesUpdated.textContent = "Last update: " + fmtTime(payload.timestamp || Date.now());
+          if (Object.keys(state.prices).length > 0 && state.sseConnected) {
+            clearCornerError();
           }
         } catch (err) {
           console.error("Error handling SSE prices:", err);
+          showCornerError("SSE 価格データ異常", err?.message || String(err));
         }
       });
 
       eventSource.addEventListener("positions", (e) => {
         try {
           const payload = JSON.parse(e.data);
-          if (payload.positions) {
-            state.positions = payload.positions;
-            renderPositions();
+          if (!payload || !Array.isArray(payload.positions)) {
+            throw new Error("SSE positions ペイロードが不正です");
           }
+          state.positions = payload.positions;
+          renderPositions();
         } catch (err) {
           console.error("Error handling SSE positions:", err);
+          showCornerError("SSE ポジションデータ異常", err?.message || String(err));
         }
       });
 
       eventSource.addEventListener("orders", (e) => {
         try {
           const payload = JSON.parse(e.data);
-          if (payload.update) {
-            const upd = payload.update;
-            const oid = upd.order?.oid;
-            // Update or remove from open orders
-            if (["filled", "canceled", "rejected"].includes(upd.status)) {
-              state.orders = state.orders.filter((o) => (o.order ? o.order.oid : o.oid) !== oid);
-            } else {
-              const idx = state.orders.findIndex((o) => (o.order ? o.order.oid : o.oid) === oid);
-              if (idx >= 0) {
-                state.orders[idx] = upd;
-              } else {
-                state.orders.unshift(upd);
-              }
-            }
-            renderOrders();
-            statOrdersUpdated.textContent = "Last update: " + fmtTime(payload.timestamp || Date.now());
+          if (!payload || !payload.update) {
+            throw new Error("SSE orders ペイロードが不正です");
           }
+          const upd = payload.update;
+          const oid = upd.order?.oid;
+          // Update or remove from open orders
+          if (["filled", "canceled", "rejected"].includes(upd.status)) {
+            state.orders = state.orders.filter((o) => (o.order ? o.order.oid : o.oid) !== oid);
+          } else {
+            const idx = state.orders.findIndex((o) => (o.order ? o.order.oid : o.oid) === oid);
+            if (idx >= 0) {
+              state.orders[idx] = upd;
+            } else {
+              state.orders.unshift(upd);
+            }
+          }
+          renderOrders();
+          statOrdersUpdated.textContent = "Last update: " + fmtTime(payload.timestamp || Date.now());
         } catch (err) {
           console.error("Error handling SSE orders:", err);
+          showCornerError("SSE 注文データ異常", err?.message || String(err));
         }
       });
 
       eventSource.addEventListener("fills", (e) => {
         try {
           const payload = JSON.parse(e.data);
-          if (Array.isArray(payload.fills)) {
-            // Prepend new fills
-            state.fills = [...payload.fills, ...state.fills].slice(0, 500);
-            renderFills();
+          if (!payload || !Array.isArray(payload.fills)) {
+            throw new Error("SSE fills ペイロードが不正です");
           }
+          // Prepend new fills
+          state.fills = [...payload.fills, ...state.fills].slice(0, 500);
+          renderFills();
         } catch (err) {
           console.error("Error handling SSE fills:", err);
+          showCornerError("SSE 約定データ異常", err?.message || String(err));
         }
       });
 
@@ -929,6 +1012,7 @@
         sseStatusDot.className = "w-1.5 h-1.5 rounded-full bg-rose-500";
         sseStatusText.textContent = "SSE OFF";
         sseStatusText.className = "text-rose-400 font-mono text-[11px]";
+        showCornerError("SSE 接続切断", "リアルタイム配信 (api/events) が切断されました。再接続・ポーリング待機中...");
       };
     }
 

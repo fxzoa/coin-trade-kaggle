@@ -726,6 +726,41 @@ export function renderWebUI(): string {
     dca-deno (Deno 2.x / Hyperliquid DEX Self-Contained Worker)
   </footer>
 
+  <!-- エラー通知ポップアップ (非ブロッキング Toast) -->
+  <div
+    x-cloak
+    x-show="errorPopup.visible"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0 translate-y-2"
+    x-transition:enter-end="opacity-100 translate-y-0"
+    x-transition:leave="transition ease-in duration-150"
+    x-transition:leave-start="opacity-100 translate-y-0"
+    x-transition:leave-end="opacity-0 translate-y-2"
+    role="alert"
+    class="fixed top-4 right-4 z-50 w-[min(92vw,420px)] bg-surface-1 border border-crimson-err/60 rounded-lg shadow-[0_8px_30px_rgba(244,63,94,0.28)] p-3.5 text-xs text-slate-100"
+  >
+    <div class="flex items-start gap-2.5">
+      <span class="material-symbols-outlined text-crimson-err text-[20px] shrink-0 mt-0.5">error</span>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="font-bold text-crimson-err tracking-tight truncate" x-text="errorPopup.title"></h3>
+          <span class="text-[10px] font-mono text-slate-400 shrink-0" x-text="errorPopup.time"></span>
+        </div>
+        <p class="mt-1 text-slate-200 leading-relaxed break-words" x-text="errorPopup.message"></p>
+        <div class="mt-2.5 flex items-center justify-end gap-2">
+          <button
+            @click="refreshData()"
+            class="px-2.5 py-1 rounded bg-surface-2 hover:bg-border-elevated border border-border-base text-[11px] font-mono text-slate-200 cursor-pointer transition-colors"
+          >再取得</button>
+          <button
+            @click="dismissErrorPopup()"
+            class="px-2.5 py-1 rounded bg-crimson-err/15 hover:bg-crimson-err/25 border border-crimson-err/40 text-[11px] font-mono text-crimson-err cursor-pointer transition-colors"
+          >閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     function dcaApp() {
       return {
@@ -742,6 +777,29 @@ export function renderWebUI(): string {
         currentTab: 'dca',
         errorLogs: [],
         chartLoading: false,
+        errorPopup: {
+          visible: false,
+          title: '',
+          message: '',
+          time: '',
+        },
+
+        showErrorPopup(title, message) {
+          const now = new Date();
+          const hh = String(now.getHours()).padStart(2, '0');
+          const mm = String(now.getMinutes()).padStart(2, '0');
+          const ss = String(now.getSeconds()).padStart(2, '0');
+          this.errorPopup = {
+            visible: true,
+            title: title || 'データ取得エラー',
+            message: message || 'データの取得に失敗しました。',
+            time: hh + ':' + mm + ':' + ss,
+          };
+        },
+
+        dismissErrorPopup() {
+          this.errorPopup.visible = false;
+        },
         chartPeriods: [
           { label: '24時間', hours: 24 },
           { label: '7日', hours: 168 },
@@ -929,9 +987,13 @@ export function renderWebUI(): string {
               fetch('api/system-status'),
               fetch('api/health'),
             ]);
+            const failedEndpoints = [];
+            const invalidResponses = [];
             if (healthRes.ok) {
               const healthData = await healthRes.json();
-              this.redisConnected = Boolean(healthData.redisConnected);
+              this.redisConnected = Boolean(healthData && healthData.redisConnected);
+            } else {
+              failedEndpoints.push('api/health (' + healthRes.status + ')');
             }
             if (statsRes.ok) {
               const newStats = await statsRes.json();
@@ -944,21 +1006,55 @@ export function renderWebUI(): string {
                   }
                 }
                 this.statsList = newStats;
+              } else {
+                invalidResponses.push('api/stats');
               }
+            } else {
+              failedEndpoints.push('api/stats (' + statsRes.status + ')');
             }
             if (signalsRes.ok) {
-              this.signals = await signalsRes.json();
+              const signalsData = await signalsRes.json();
+              if (Array.isArray(signalsData)) {
+                this.signals = signalsData;
+              } else {
+                invalidResponses.push('api/signals');
+              }
+            } else {
+              failedEndpoints.push('api/signals (' + signalsRes.status + ')');
             }
             if (ordersRes.ok) {
-              this.orders = await ordersRes.json();
+              const ordersData = await ordersRes.json();
+              if (Array.isArray(ordersData)) {
+                this.orders = ordersData;
+              } else {
+                invalidResponses.push('api/orders');
+              }
+            } else {
+              failedEndpoints.push('api/orders (' + ordersRes.status + ')');
             }
             if (sysRes.ok) {
               const sys = await sysRes.json();
-              this.insufficientCooldown = sys.insufficientCooldown;
+              this.insufficientCooldown = sys ? sys.insufficientCooldown : null;
+            } else {
+              failedEndpoints.push('api/system-status (' + sysRes.status + ')');
             }
             await this.fetchErrors();
+
+            if (failedEndpoints.length > 0) {
+              this.showErrorPopup('API 取得エラー', '以下のエンドポイントの取得に失敗しました: ' + failedEndpoints.join(', '));
+            } else if (invalidResponses.length > 0) {
+              this.showErrorPopup('データ形式エラー', '以下のエンドポイントのレスポンス形式が不正です: ' + invalidResponses.join(', '));
+            } else if (!this.redisConnected) {
+              this.showErrorPopup('Redis 未接続', 'Redis サーバーとの接続が確立されていません。価格統計を取得できない可能性があります。');
+            } else if (this.statsList.length === 0) {
+              const coins = this.config && this.config.targetCoins ? this.config.targetCoins.join(', ') : '対象通貨';
+              this.showErrorPopup('価格統計データ未取得', '対象銘柄 (' + coins + ') の価格統計データ (api/stats) が空です。Redis の hl:price_stats / 個別キーを確認してください。');
+            } else {
+              this.dismissErrorPopup();
+            }
           } catch (e) {
             console.error('データ取得エラー:', e);
+            this.showErrorPopup('通信エラー', 'サーバーからのデータ取得に失敗しました: ' + (e instanceof Error ? e.message : String(e)));
           }
         },
 

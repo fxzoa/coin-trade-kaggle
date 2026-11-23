@@ -60,6 +60,101 @@ function isValidThresholds(t) {
     typeof t.additionalDip24h === "number" && typeof t.additionalSurge24h === "number";
 }
 
+/**
+ * Non-blocking corner error popup (fixed top-right) with per-source tracking
+ */
+const CORNER_ERROR_ID = "cornerErrorPopup";
+const activeCornerErrors = new Map();
+
+function showCornerError(title, message) {
+  if (typeof document === "undefined" || !document.body) return;
+  let el = document.getElementById(CORNER_ERROR_ID);
+  if (!el) {
+    el = document.createElement("div");
+    el.id = CORNER_ERROR_ID;
+    el.setAttribute("role", "alert");
+    el.style.cssText = [
+      "position: fixed",
+      "top: 16px",
+      "right: 16px",
+      "z-index: 99999",
+      "max-width: 380px",
+      "min-width: 260px",
+      "background: #131926",
+      "border: 1px solid #F43F5E",
+      "border-left: 4px solid #F43F5E",
+      "border-radius: 8px",
+      "padding: 12px 14px",
+      "color: #F8FAFC",
+      'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      "font-size: 13px",
+      "line-height: 1.45",
+      "box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5)",
+    ].join(";");
+    document.body.appendChild(el);
+  }
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const ts = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+  el.innerHTML = "";
+  const header = document.createElement("div");
+  header.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;";
+
+  const titleEl = document.createElement("strong");
+  titleEl.style.cssText = "color:#FB7185;font-size:13px;font-weight:700;";
+  titleEl.textContent = title || "データ取得異常";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.textContent = "×";
+  closeBtn.setAttribute("aria-label", "閉じる");
+  closeBtn.style.cssText = "background:transparent;border:none;color:#94A3B8;font-size:16px;line-height:1;cursor:pointer;padding:0 2px;";
+  closeBtn.addEventListener("click", clearCornerError);
+
+  header.appendChild(titleEl);
+  header.appendChild(closeBtn);
+
+  const msgEl = document.createElement("div");
+  msgEl.style.cssText = "color:#E2E8F0;word-break:break-word;margin-bottom:6px;";
+  msgEl.textContent = message || "異常なレスポンスを検出しました";
+
+  const timeEl = document.createElement("div");
+  timeEl.style.cssText = "color:#94A3B8;font-size:11px;font-family:monospace;";
+  timeEl.textContent = `検出時刻: ${ts}`;
+
+  el.appendChild(header);
+  el.appendChild(msgEl);
+  el.appendChild(timeEl);
+  el.style.display = "block";
+}
+
+function clearCornerError() {
+  activeCornerErrors.clear();
+  const el = document.getElementById(CORNER_ERROR_ID);
+  if (el) el.style.display = "none";
+}
+
+function reportCornerError(sourceKey, title, message) {
+  activeCornerErrors.set(sourceKey, { title, message });
+  const messages = Array.from(activeCornerErrors.values()).map((e) => e.message);
+  showCornerError(title, messages.join(" / "));
+}
+
+function resolveCornerError(sourceKey) {
+  if (!activeCornerErrors.has(sourceKey)) return;
+  activeCornerErrors.delete(sourceKey);
+  if (activeCornerErrors.size === 0) {
+    const el = document.getElementById(CORNER_ERROR_ID);
+    if (el) el.style.display = "none";
+  } else {
+    const last = Array.from(activeCornerErrors.values()).pop();
+    const messages = Array.from(activeCornerErrors.values()).map((e) => e.message);
+    showCornerError(last.title, messages.join(" / "));
+  }
+}
+
 document.addEventListener("alpine:init", () => {
   Alpine.data("priceMonitor", () => {
     // 導出データのメモ化キャッシュ (入力の参照が変わらない限り再計算しない。非リアクティブに保持する)
@@ -223,15 +318,17 @@ document.addEventListener("alpine:init", () => {
         this.isSignalsLoading = true;
         try {
           const res = await fetch("api/signals?limit=50");
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success) {
-              this.signals = data.data || [];
-              this.signalsCount = data.count || 0;
-            }
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          if (!data || typeof data !== "object" || !data.success || !Array.isArray(data.data)) {
+            throw new Error("シグナル応答形式が不正です");
           }
+          this.signals = data.data;
+          this.signalsCount = data.count || 0;
+          resolveCornerError("signals");
         } catch (err) {
           console.error("シグナル一覧取得失敗:", err);
+          reportCornerError("signals", "シグナル取得異常", `api/signals: ${err.message || "通信/パースエラー"}`);
         } finally {
           this.isSignalsLoading = false;
         }
@@ -347,13 +444,16 @@ document.addEventListener("alpine:init", () => {
           const res = await fetch("api/status");
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
-          if (data.success) {
-            this.status = data;
-            this.errorMessage = "";
+          if (!data || typeof data !== "object" || !data.success || !data.db || typeof data.db !== "object") {
+            throw new Error("ステータスデータが不正または欠損しています");
           }
+          this.status = data;
+          this.errorMessage = "";
+          resolveCornerError("status");
         } catch (err) {
           console.error("ステータス取得に失敗しました:", err);
           this.errorMessage = "バックエンド通信エラー: DBステータスを取得できませんでした";
+          reportCornerError("status", "ステータス取得異常", `api/status: ${err.message || "通信/パースエラー"}`);
         }
       },
 
@@ -368,16 +468,31 @@ document.addEventListener("alpine:init", () => {
           const res = await fetch(url.toString());
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
-          if (data.success && Array.isArray(data.data)) {
-            this.ranges = data.data;
-            this.totalSymbols = data.total || 0;
-            this.refTimeJst = data.refTimeJst || "--";
-            if (isValidThresholds(data.thresholds)) this.thresholds = data.thresholds;
-            this.errorMessage = "";
-            this.loadFailed = false;
+          if (!data || typeof data !== "object" || !data.success || !Array.isArray(data.data)) {
+            throw new Error("レンジ応答形式が不正です");
+          }
+          this.ranges = data.data;
+          this.totalSymbols = data.total || 0;
+          this.refTimeJst = data.refTimeJst || "--";
+          if (isValidThresholds(data.thresholds)) this.thresholds = data.thresholds;
+          this.errorMessage = "";
+          this.loadFailed = false;
+
+          if (data.data.length === 0) {
+            reportCornerError("ranges", "レンジデータ異常", "api/ranges: 銘柄レンジデータが空(0件)です");
+          } else {
+            const invalidItem = data.data.find(
+              (it) => !it || !it.symbol || (it.latestClose !== null && it.latestClose !== undefined && Number.isNaN(Number(it.latestClose))),
+            );
+            if (invalidItem) {
+              reportCornerError("ranges", "レンジデータ異常", "api/ranges: 必須フィールド欠損またはNaN価格を検出");
+            } else {
+              resolveCornerError("ranges");
+            }
           }
         } catch (err) {
           console.error("レンジ取得に失敗しました:", err);
+          reportCornerError("ranges", "レンジ取得異常", `api/ranges: ${err.message || "通信/パースエラー"}`);
           // 既にデータが表示されている場合はエラーバナーで消去せず前回のデータを保持する
           if (!this.ranges || this.ranges.length === 0) {
             this.errorMessage = "期間別レンジの取得に失敗しました";
@@ -734,17 +849,21 @@ document.addEventListener("alpine:init", () => {
           const res = await fetch("api/price-change");
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
-          if (data.success) {
-            this.priceChangeItems = data.items || [];
+          if (!data || typeof data !== "object" || !data.success || !Array.isArray(data.items)) {
+            const msg = (data && data.error) || "騰落率データの応答形式が不正です";
+            this.priceChangeError = msg;
+            reportCornerError("price-change", "騰落率データ異常", `api/price-change: ${msg}`);
+          } else {
+            this.priceChangeItems = data.items;
             this.priceChangeTimestamp = data.timestamp
               ? new Date(data.timestamp).toLocaleTimeString("ja-JP")
               : "";
-          } else {
-            this.priceChangeError = data.error || "騰落率データの取得に失敗しました";
+            resolveCornerError("price-change");
           }
         } catch (err) {
           console.error("騰落率データ取得エラー:", err);
           this.priceChangeError = err.message || "通信エラーが発生しました";
+          reportCornerError("price-change", "騰落率取得異常", `api/price-change: ${this.priceChangeError}`);
         } finally {
           this.isPriceChangeLoading = false;
         }
@@ -898,17 +1017,21 @@ document.addEventListener("alpine:init", () => {
           const res = await fetch("api/volume-ranking?limit=200");
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
-          if (data.success) {
-            this.volumeRankingItems = data.items || [];
+          if (!data || typeof data !== "object" || !data.success || !Array.isArray(data.items)) {
+            const msg = (data && data.error) || "出来高データの応答形式が不正です";
+            this.volumeRankingError = msg;
+            reportCornerError("volume-ranking", "出来高データ異常", `api/volume-ranking: ${msg}`);
+          } else {
+            this.volumeRankingItems = data.items;
             this.volumeRankingTimestamp = data.timestamp
               ? new Date(data.timestamp).toLocaleTimeString("ja-JP")
               : "";
-          } else {
-            this.volumeRankingError = data.error || "出来高データの取得に失敗しました";
+            resolveCornerError("volume-ranking");
           }
         } catch (err) {
           console.error("出来高データ取得エラー:", err);
           this.volumeRankingError = err.message || "通信エラーが発生しました";
+          reportCornerError("volume-ranking", "出来高取得異常", `api/volume-ranking: ${this.volumeRankingError}`);
         } finally {
           this.isVolumeRankingLoading = false;
         }

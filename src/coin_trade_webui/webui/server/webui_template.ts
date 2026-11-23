@@ -497,6 +497,41 @@ export function renderCloseWebUI(): string {
     </div>
   </footer>
 
+  <!-- エラー通知ポップアップ (非ブロッキング Toast) -->
+  <div
+    x-cloak
+    x-show="errorPopup.visible"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0 translate-y-2"
+    x-transition:enter-end="opacity-100 translate-y-0"
+    x-transition:leave="transition ease-in duration-150"
+    x-transition:leave-start="opacity-100 translate-y-0"
+    x-transition:leave-end="opacity-0 translate-y-2"
+    role="alert"
+    class="fixed top-4 right-4 z-50 w-[min(92vw,420px)] bg-surface-1 border border-crimson-err/60 rounded-lg shadow-[0_8px_30px_rgba(244,63,94,0.28)] p-3.5 text-xs text-slate-100"
+  >
+    <div class="flex items-start gap-2.5">
+      <span class="material-symbols-outlined text-crimson-err text-[20px] shrink-0 mt-0.5">error</span>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="font-bold text-crimson-err tracking-tight truncate" x-text="errorPopup.title"></h3>
+          <span class="text-[10px] font-mono text-slate-400 shrink-0" x-text="errorPopup.time"></span>
+        </div>
+        <p class="mt-1 text-slate-200 leading-relaxed break-words" x-text="errorPopup.message"></p>
+        <div class="mt-2.5 flex items-center justify-end gap-2">
+          <button
+            @click="loadData()"
+            class="px-2.5 py-1 rounded bg-surface-2 hover:bg-border-elevated border border-border-base text-[11px] font-mono text-slate-200 cursor-pointer transition-colors"
+          >再取得</button>
+          <button
+            @click="dismissErrorPopup()"
+            class="px-2.5 py-1 rounded bg-crimson-err/15 hover:bg-crimson-err/25 border border-crimson-err/40 text-[11px] font-mono text-crimson-err cursor-pointer transition-colors"
+          >閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Alpine.js アプリケーションステート & ロジック -->
   <script>
     function closeApp() {
@@ -510,6 +545,29 @@ export function renderCloseWebUI(): string {
         limit: 100,
         loading: false,
         lastRefreshed: '--:--:--',
+        errorPopup: {
+          visible: false,
+          title: '',
+          message: '',
+          time: '',
+        },
+
+        showErrorPopup(title, message) {
+          const now = new Date();
+          const hh = String(now.getHours()).padStart(2, '0');
+          const mm = String(now.getMinutes()).padStart(2, '0');
+          const ss = String(now.getSeconds()).padStart(2, '0');
+          this.errorPopup = {
+            visible: true,
+            title: title || 'データ取得エラー',
+            message: message || 'データの取得に失敗しました。',
+            time: hh + ':' + mm + ':' + ss,
+          };
+        },
+
+        dismissErrorPopup() {
+          this.errorPopup.visible = false;
+        },
 
         get filteredRecords() {
           const q = (this.coinFilter || '').trim().toUpperCase();
@@ -607,29 +665,65 @@ export function renderCloseWebUI(): string {
               fetch('api/order-stats')
             ]);
 
+            const failedEndpoints = [];
+            const invalidResponses = [];
+
             if (histRes.ok) {
               const histData = await histRes.json();
-              this.records = histData.records || [];
+              if (histData && Array.isArray(histData.records)) {
+                this.records = histData.records;
+              } else {
+                invalidResponses.push('api/history');
+              }
+            } else {
+              failedEndpoints.push('api/history (' + histRes.status + ')');
             }
 
             if (statsRes.ok) {
               const statsData = await statsRes.json();
-              this.stats = statsData.stats || {};
+              if (statsData && typeof statsData.stats === 'object' && statsData.stats !== null) {
+                this.stats = statsData.stats;
+              } else {
+                invalidResponses.push('api/stats');
+              }
+            } else {
+              failedEndpoints.push('api/stats (' + statsRes.status + ')');
             }
 
             if (ordersRes.ok) {
               const ordersData = await ordersRes.json();
-              this.orderRecords = ordersData.records || [];
+              if (ordersData && Array.isArray(ordersData.records)) {
+                this.orderRecords = ordersData.records;
+              } else {
+                invalidResponses.push('api/orders');
+              }
+            } else {
+              failedEndpoints.push('api/orders (' + ordersRes.status + ')');
             }
 
             if (orderStatsRes.ok) {
               const orderStatsData = await orderStatsRes.json();
-              this.orderStats = orderStatsData.stats || {};
+              if (orderStatsData && typeof orderStatsData.stats === 'object' && orderStatsData.stats !== null) {
+                this.orderStats = orderStatsData.stats;
+              } else {
+                invalidResponses.push('api/order-stats');
+              }
+            } else {
+              failedEndpoints.push('api/order-stats (' + orderStatsRes.status + ')');
             }
 
             this.lastRefreshed = new Date().toLocaleTimeString('ja-JP');
+
+            if (failedEndpoints.length > 0) {
+              this.showErrorPopup('API 取得エラー', '以下のエンドポイントの取得に失敗しました: ' + failedEndpoints.join(', '));
+            } else if (invalidResponses.length > 0) {
+              this.showErrorPopup('データ形式エラー', '以下のエンドポイントのレスポンス形式が不正です: ' + invalidResponses.join(', '));
+            } else {
+              this.dismissErrorPopup();
+            }
           } catch (err) {
             console.error('データ取得エラー:', err);
+            this.showErrorPopup('通信エラー', 'サーバーからのデータ取得に失敗しました: ' + (err instanceof Error ? err.message : String(err)));
           } finally {
             this.loading = false;
           }

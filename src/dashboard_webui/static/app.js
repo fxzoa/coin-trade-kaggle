@@ -35,6 +35,40 @@ function getBotProxyUrl(botKey) {
   return `${globalThis.location.origin}/proxy/${encodeURIComponent(botKey)}/`;
 }
 
+// Corner Error Popup (non-blocking)
+function showCornerError(title, message) {
+  let el = document.getElementById("corner-error-popup");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "corner-error-popup";
+    el.setAttribute("role", "alert");
+    el.style.cssText =
+      "position:fixed;top:12px;right:12px;z-index:9999;max-width:360px;min-width:260px;" +
+      "background:#131926;border:1px solid #F43F5E;border-radius:8px;padding:10px 12px;" +
+      "box-shadow:0 8px 24px rgba(0,0,0,0.55);color:#f1f5f9;font-family:Inter,sans-serif;font-size:12px;";
+    el.innerHTML =
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">' +
+        '<div style="min-width:0;flex:1;">' +
+          '<div id="corner-error-title" style="color:#F43F5E;font-weight:700;font-size:12px;line-height:1.3;"></div>' +
+          '<div id="corner-error-msg" style="color:#e2e8f0;font-size:11px;margin-top:4px;word-break:break-word;line-height:1.4;"></div>' +
+          '<div id="corner-error-time" style="color:#94a3b8;font-size:10px;font-family:JetBrains Mono,monospace;margin-top:6px;"></div>' +
+        '</div>' +
+        '<button id="corner-error-close" type="button" aria-label="閉じる" style="background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:16px;line-height:1;padding:0 2px;">&times;</button>' +
+      '</div>';
+    document.body.appendChild(el);
+    document.getElementById("corner-error-close").addEventListener("click", clearCornerError);
+  }
+  document.getElementById("corner-error-title").textContent = title || "データ異常";
+  document.getElementById("corner-error-msg").textContent = message || "不明なエラーが発生しました";
+  document.getElementById("corner-error-time").textContent = new Date().toLocaleTimeString("ja-JP", { hour12: false });
+  el.style.display = "block";
+}
+
+function clearCornerError() {
+  const el = document.getElementById("corner-error-popup");
+  if (el) el.style.display = "none";
+}
+
 // 時計更新
 function updateClock() {
   const now = new Date();
@@ -234,10 +268,16 @@ function renderBots(bots) {
 
 // ステータス更新フェッチ
 async function fetchStatus() {
+  let detectedError = null;
+
   try {
     const res = await fetch("/api/bots/status");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+
+    if (!data || !data.summary || !Array.isArray(data.bots)) {
+      throw new Error("レスポンス形式が不正です (summary/bots 欠落)");
+    }
 
     valTotalBots.textContent = data.summary.total;
     valHealthyBots.textContent = data.summary.healthy;
@@ -255,53 +295,92 @@ async function fetchStatus() {
     }
 
     renderBots(data.bots);
+
+    if (data.bots.length === 0) {
+      detectedError = {
+        title: "ボットデータ異常",
+        message: "監視対象ボット一覧が空です (/api/bots/status)",
+      };
+    } else if (!data.summary.allHealthy || Number(data.summary.unhealthy) > 0) {
+      detectedError = {
+        title: "ボット異常検知",
+        message: `${data.summary.unhealthy} / ${data.summary.total} 件のボットがオフラインまたは異常です`,
+      };
+    }
   } catch (err) {
     console.error("Failed to fetch status:", err);
     if (overallBadge) {
       overallBadge.style.display = "inline-flex";
       overallBadge.querySelector(".status-text").textContent = "Gateway Disconnected";
     }
+    detectedError = {
+      title: "ボットステータス取得エラー",
+      message: `API 通信またはパースに失敗しました: ${err?.message || String(err)}`,
+    };
   }
 
   // Redis ステータス取得
   try {
     const healthRes = await fetch("/api/health");
-    if (healthRes.ok) {
-      const healthData = await healthRes.json();
-      const redisBadge = document.getElementById("redis-status-badge");
-      const redisIndicator = document.getElementById("redis-indicator");
-      const redisText = document.getElementById("redis-status-text");
+    if (!healthRes.ok) {
+      throw new Error(`HTTP ${healthRes.status}`);
+    }
+    const healthData = await healthRes.json();
+    if (!healthData || typeof healthData !== "object") {
+      throw new Error("ヘルスチェックのレスポンス形式が不正です");
+    }
 
-      if (redisBadge && redisIndicator && redisText) {
-        if (healthData.redis === "connected") {
-          redisIndicator.style.background = "#10b981";
-          redisIndicator.style.boxShadow = "0 0 8px #10b981";
-          const latencyStr = healthData.redisLatencyMs ? ` (${healthData.redisLatencyMs}ms)` : "";
-          redisText.textContent = `Redis${latencyStr}`;
-        } else {
-          redisIndicator.style.background = "#f43f5e";
-          redisIndicator.style.boxShadow = "0 0 8px #f43f5e";
-          redisText.textContent = "Redis Offline";
-        }
-      }
+    const redisBadge = document.getElementById("redis-status-badge");
+    const redisIndicator = document.getElementById("redis-indicator");
+    const redisText = document.getElementById("redis-status-text");
 
-      const insBadge = document.getElementById("dashboard-insufficient-badge");
-      const insTime = document.getElementById("dashboard-insufficient-time");
-      if (insBadge && insTime) {
-        if (healthData.insufficientCooldown?.active) {
-          insBadge.style.display = "inline-flex";
-          const m = healthData.insufficientCooldown.remainingSec
-            ? `(${Math.ceil(healthData.insufficientCooldown.remainingSec / 60)}m)`
-            : "";
-          insTime.textContent = m;
-          insBadge.title = healthData.insufficientCooldown.reason || "残高不足により一時停止中";
-        } else {
-          insBadge.style.display = "none";
+    if (redisBadge && redisIndicator && redisText) {
+      if (healthData.redis === "connected") {
+        redisIndicator.style.background = "#10b981";
+        redisIndicator.style.boxShadow = "0 0 8px #10b981";
+        const latencyStr = healthData.redisLatencyMs ? ` (${healthData.redisLatencyMs}ms)` : "";
+        redisText.textContent = `Redis${latencyStr}`;
+      } else {
+        redisIndicator.style.background = "#f43f5e";
+        redisIndicator.style.boxShadow = "0 0 8px #f43f5e";
+        redisText.textContent = "Redis Offline";
+        if (!detectedError) {
+          detectedError = {
+            title: "Redis 接続異常",
+            message: `Redis が切断されています (status: ${healthData.redis ?? "unknown"})`,
+          };
         }
       }
     }
-  } catch {
-    // ignore
+
+    const insBadge = document.getElementById("dashboard-insufficient-badge");
+    const insTime = document.getElementById("dashboard-insufficient-time");
+    if (insBadge && insTime) {
+      if (healthData.insufficientCooldown?.active) {
+        insBadge.style.display = "inline-flex";
+        const m = healthData.insufficientCooldown.remainingSec
+          ? `(${Math.ceil(healthData.insufficientCooldown.remainingSec / 60)}m)`
+          : "";
+        insTime.textContent = m;
+        insBadge.title = healthData.insufficientCooldown.reason || "残高不足により一時停止中";
+      } else {
+        insBadge.style.display = "none";
+      }
+    }
+  } catch (err) {
+    console.error("Failed to fetch health:", err);
+    if (!detectedError) {
+      detectedError = {
+        title: "ヘルスチェック取得エラー",
+        message: `/api/health の取得に失敗しました: ${err?.message || String(err)}`,
+      };
+    }
+  }
+
+  if (detectedError) {
+    showCornerError(detectedError.title, detectedError.message);
+  } else {
+    clearCornerError();
   }
 }
 

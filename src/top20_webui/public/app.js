@@ -61,6 +61,81 @@
   };
 
   /* ==========================================================================
+     Non-blocking Corner Error Popup (fixed top-right)
+     ========================================================================== */
+
+  const CORNER_ERROR_ID = 'cornerErrorPopup';
+
+  function showCornerError(title, message) {
+    if (typeof document === 'undefined' || !document.body) return;
+    let el = document.getElementById(CORNER_ERROR_ID);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = CORNER_ERROR_ID;
+      el.setAttribute('role', 'alert');
+      el.style.cssText = [
+        'position: fixed',
+        'top: 16px',
+        'right: 16px',
+        'z-index: 99999',
+        'max-width: 380px',
+        'min-width: 260px',
+        'background: #131926',
+        'border: 1px solid #F43F5E',
+        'border-left: 4px solid #F43F5E',
+        'border-radius: 8px',
+        'padding: 12px 14px',
+        'color: #F8FAFC',
+        'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        'font-size: 13px',
+        'line-height: 1.45',
+        'box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5)'
+      ].join(';');
+      document.body.appendChild(el);
+    }
+
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const ts = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+    el.innerHTML = '';
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;';
+
+    const titleEl = document.createElement('strong');
+    titleEl.style.cssText = 'color:#FB7185;font-size:13px;font-weight:700;';
+    titleEl.textContent = title || 'データ取得異常';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = '×';
+    closeBtn.setAttribute('aria-label', '閉じる');
+    closeBtn.style.cssText = 'background:transparent;border:none;color:#94A3B8;font-size:16px;line-height:1;cursor:pointer;padding:0 2px;';
+    closeBtn.addEventListener('click', clearCornerError);
+
+    header.appendChild(titleEl);
+    header.appendChild(closeBtn);
+
+    const msgEl = document.createElement('div');
+    msgEl.style.cssText = 'color:#E2E8F0;word-break:break-word;margin-bottom:6px;';
+    msgEl.textContent = message || '異常なレスポンスを検出しました';
+
+    const timeEl = document.createElement('div');
+    timeEl.style.cssText = 'color:#94A3B8;font-size:11px;font-family:monospace;';
+    timeEl.textContent = `検出時刻: ${ts}`;
+
+    el.appendChild(header);
+    el.appendChild(msgEl);
+    el.appendChild(timeEl);
+    el.style.display = 'block';
+  }
+
+  function clearCornerError() {
+    const el = document.getElementById(CORNER_ERROR_ID);
+    if (el) el.style.display = 'none';
+  }
+
+  /* ==========================================================================
      Formatters & Utilities
      ========================================================================== */
 
@@ -158,28 +233,68 @@
       if (state.timeframe === '30d') limit = 720; // 30 days * 24 hours
       else if (state.timeframe === 'all') limit = 1000;
 
-      const [latestRes, historyRes] = await Promise.all([
-        fetch('/api/latest').then((r) => r.json()),
-        fetch(`/api/history?limit=${limit}&order=desc`).then((r) => r.json())
+      const [latestHttp, historyHttp] = await Promise.all([
+        fetch('/api/latest'),
+        fetch(`/api/history?limit=${limit}&order=desc`)
       ]);
 
-      if (!latestRes.success) {
-        throw new Error(latestRes.error || 'Failed to fetch latest record');
+      if (!latestHttp.ok) {
+        throw new Error(`/api/latest: HTTP ${latestHttp.status}`);
       }
-      if (!historyRes.success) {
-        throw new Error(historyRes.error || 'Failed to fetch historical data');
+      if (!historyHttp.ok) {
+        throw new Error(`/api/history: HTTP ${historyHttp.status}`);
+      }
+
+      const [latestRes, historyRes] = await Promise.all([
+        latestHttp.json(),
+        historyHttp.json()
+      ]);
+
+      if (!latestRes || typeof latestRes !== 'object' || !latestRes.success) {
+        throw new Error((latestRes && latestRes.error) || 'Failed to fetch latest record');
+      }
+      if (!historyRes || typeof historyRes !== 'object' || !historyRes.success) {
+        throw new Error((historyRes && historyRes.error) || 'Failed to fetch historical data');
+      }
+
+      const anomalies = [];
+      const latest = latestRes.data;
+      if (!latest || typeof latest !== 'object') {
+        anomalies.push('/api/latest: 最新レコードが欠損しています');
+      } else {
+        const totalVol = Number(latest.total_volume_24h ?? latest.total_volume_1h);
+        if (!Number.isFinite(totalVol) || totalVol <= 0) {
+          anomalies.push('/api/latest: 24H取引量合計が異常(NaNまたは0以下)');
+        }
+        if (!latest.timestamp || isNaN(new Date(latest.timestamp).getTime())) {
+          anomalies.push('/api/latest: タイムスタンプが不正または欠損');
+        }
+      }
+
+      if (!Array.isArray(historyRes.data)) {
+        anomalies.push('/api/history: 履歴データが配列ではありません');
+      } else if (historyRes.data.length === 0) {
+        anomalies.push('/api/history: 履歴データが空です');
       }
 
       state.latestData = latestRes.data;
-      state.historyData = (historyRes.data || []).slice().reverse();
+      state.historyData = Array.isArray(historyRes.data) ? historyRes.data.slice().reverse() : [];
       state.lastFetchTime = new Date();
 
       updateUI();
       hideOverlays();
       updateConnectionStatus(true);
+
+      if (anomalies.length > 0) {
+        showCornerError('データ異常検知', anomalies.join(' / '));
+      } else {
+        clearCornerError();
+      }
     } catch (err) {
       console.error('Fetch error:', err);
-      showError(err.message || 'データ取得エラーが発生しました');
+      const errMsg = err.message || 'データ取得エラーが発生しました';
+      showError(errMsg);
+      showCornerError('API 取得エラー', errMsg);
       updateConnectionStatus(false);
     } finally {
       state.isLoading = false;

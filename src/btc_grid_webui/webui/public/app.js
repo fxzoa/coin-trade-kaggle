@@ -63,6 +63,96 @@ const elSsePill = document.getElementById('sseStatusPill');
 const elSseText = document.getElementById('sseStatusText');
 
 /**
+ * Non-blocking corner error popup (fixed top-right)
+ */
+const CORNER_ERROR_ID = 'cornerErrorPopup';
+
+function showCornerError(title, message) {
+  if (typeof document === 'undefined' || !document.body) return;
+  let el = document.getElementById(CORNER_ERROR_ID);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = CORNER_ERROR_ID;
+    el.setAttribute('role', 'alert');
+    el.style.cssText = [
+      'position: fixed',
+      'top: 16px',
+      'right: 16px',
+      'z-index: 99999',
+      'max-width: 380px',
+      'min-width: 260px',
+      'background: #131926',
+      'border: 1px solid #F43F5E',
+      'border-left: 4px solid #F43F5E',
+      'border-radius: 8px',
+      'padding: 12px 14px',
+      'color: #F8FAFC',
+      'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      'font-size: 13px',
+      'line-height: 1.45',
+      'box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5)',
+    ].join(';');
+    document.body.appendChild(el);
+  }
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const ts = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+  el.innerHTML = '';
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;';
+
+  const titleEl = document.createElement('strong');
+  titleEl.style.cssText = 'color:#FB7185;font-size:13px;font-weight:700;';
+  titleEl.textContent = title || 'データ取得異常';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.textContent = '×';
+  closeBtn.setAttribute('aria-label', '閉じる');
+  closeBtn.style.cssText = 'background:transparent;border:none;color:#94A3B8;font-size:16px;line-height:1;cursor:pointer;padding:0 2px;';
+  closeBtn.addEventListener('click', clearCornerError);
+
+  header.appendChild(titleEl);
+  header.appendChild(closeBtn);
+
+  const msgEl = document.createElement('div');
+  msgEl.style.cssText = 'color:#E2E8F0;word-break:break-word;margin-bottom:6px;';
+  msgEl.textContent = message || '異常なレスポンスを検出しました';
+
+  const timeEl = document.createElement('div');
+  timeEl.style.cssText = 'color:#94A3B8;font-size:11px;font-family:monospace;';
+  timeEl.textContent = `検出時刻: ${ts}`;
+
+  el.appendChild(header);
+  el.appendChild(msgEl);
+  el.appendChild(timeEl);
+  el.style.display = 'block';
+}
+
+function clearCornerError() {
+  const el = document.getElementById(CORNER_ERROR_ID);
+  if (el) el.style.display = 'none';
+}
+
+async function fetchJsonChecked(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      return { ok: false, data: null, error: `${url}: HTTP ${res.status}` };
+    }
+    const json = await res.json();
+    if (!json || typeof json !== 'object') {
+      return { ok: false, data: null, error: `${url}: 不正なJSONレスポンス` };
+    }
+    return { ok: true, data: json, error: null };
+  } catch (err) {
+    return { ok: false, data: null, error: `${url}: ${err.message || '通信/パースエラー'}` };
+  }
+}
+
+/**
  * Format currency with commas and decimals
  */
 function formatUsd(val, decimals = 2) {
@@ -124,22 +214,75 @@ const shortenId = shortId;
  * Fetch all dashboard endpoints in parallel
  */
 async function fetchDashboardData() {
-  let resStatus = null;
-  let resPositions = null;
-  let resOrders = null;
-  let resHistory = null;
+  let resStatusWrap;
+  let resPositionsWrap;
+  let resOrdersWrap;
+  let resHistoryWrap;
 
   try {
-    [resStatus, resPositions, resOrders, resHistory] = await Promise.all([
-      fetch('api/status').then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      fetch('api/positions').then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      fetch('api/orders').then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      fetch('api/history').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    [resStatusWrap, resPositionsWrap, resOrdersWrap, resHistoryWrap] = await Promise.all([
+      fetchJsonChecked('api/status'),
+      fetchJsonChecked('api/positions'),
+      fetchJsonChecked('api/orders'),
+      fetchJsonChecked('api/history'),
     ]);
   } catch (netErr) {
     console.error('[Dashboard] Network fetch error:', netErr);
     updateConnectionStatus(false);
+    showCornerError('通信エラー', netErr.message || 'API データの取得に失敗しました');
     return;
+  }
+
+  const resStatus = resStatusWrap.data;
+  const resPositions = resPositionsWrap.data;
+  const resOrders = resOrdersWrap.data;
+  const resHistory = resHistoryWrap.data;
+
+  const anomalies = [];
+  if (!resStatusWrap.ok) {
+    anomalies.push(resStatusWrap.error);
+  } else if (!resStatus.success || !resStatus.data || typeof resStatus.data !== 'object') {
+    anomalies.push('api/status: ステータスデータが不正または欠損');
+  } else {
+    const price = Number(resStatus.data.currentPrice);
+    if (!Number.isFinite(price) || price <= 0) {
+      anomalies.push('api/status: BTC現在価格が異常(NaNまたは0以下)');
+    }
+  }
+
+  if (!resPositionsWrap.ok) {
+    anomalies.push(resPositionsWrap.error);
+  } else if (!resPositions.success || !resPositions.data || typeof resPositions.data !== 'object') {
+    anomalies.push('api/positions: ポジションデータが不正または欠損');
+  }
+
+  if (!resOrdersWrap.ok) {
+    anomalies.push(resOrdersWrap.error);
+  } else if (!resOrders.success || !resOrders.data || typeof resOrders.data !== 'object') {
+    anomalies.push('api/orders: 注文データが不正または欠損');
+  } else {
+    const d = resOrders.data;
+    const hasInvalidArr =
+      (d.exchangeActiveOrders !== undefined && !Array.isArray(d.exchangeActiveOrders)) ||
+      (d.activeOrders !== undefined && !Array.isArray(d.activeOrders)) ||
+      (d.recentGridOrders !== undefined && !Array.isArray(d.recentGridOrders));
+    if (hasInvalidArr) {
+      anomalies.push('api/orders: 注文配列の形式が不正');
+    }
+  }
+
+  if (!resHistoryWrap.ok) {
+    anomalies.push(resHistoryWrap.error);
+  } else if (!resHistory.success || !resHistory.data || typeof resHistory.data !== 'object') {
+    anomalies.push('api/history: 履歴データが不正または欠損');
+  } else if (resHistory.data.fills !== undefined && !Array.isArray(resHistory.data.fills)) {
+    anomalies.push('api/history: 約定履歴(fills)が配列ではありません');
+  }
+
+  if (anomalies.length > 0) {
+    showCornerError('データ異常検知', anomalies.join(' / '));
+  } else {
+    clearCornerError();
   }
 
   const isConnected = Boolean(
