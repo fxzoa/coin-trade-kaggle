@@ -267,7 +267,7 @@ export function renderWebUI(): string {
                     </div>
                     <div class="text-slate-200 font-bold" x-text="formatPrice(item.maxPrice24h)"></div>
                     <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span :class="(isLongEligible('24H', item) || getActiveSignal(item.coin, '24H', 'LONG')) ? 'text-emerald-300 font-black' : ''" x-text="formatDip(item.maxPrice24h, item.currentPrice)"></span>
+                      <span :class="(isLongThresholdMet('24H', item) || getActiveSignal(item.coin, '24H', 'LONG')) ? 'text-emerald-300 font-black' : ''" x-text="formatDip(item.maxPrice24h, item.currentPrice)"></span>
                       <span class="text-[9px] text-slate-500" x-text="'(閾値 ≥' + getLongThreshold('24H') + '%)'"></span>
                     </div>
                   </div>
@@ -284,10 +284,15 @@ export function renderWebUI(): string {
                           x-text="getActiveSignal(item.coin, '7D', 'LONG').status === 'EXECUTED' ? '発注済' : '⚡検知中'"
                         ></span>
                       </template>
+                      <template x-if="!getActiveSignal(item.coin, '7D', 'LONG') && isLongThresholdOnly('7D', item)">
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-900/80 text-amber-300 border border-amber-600/80"
+                          x-text="'下落率>' + getAdditionalDipThreshold() + '%'"
+                        ></span>
+                      </template>
                     </div>
                     <div class="text-slate-200 font-bold" x-text="formatPrice(item.maxPrice7d)"></div>
                     <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span :class="(isLongEligible('7D', item) || getActiveSignal(item.coin, '7D', 'LONG')) ? 'text-emerald-300 font-black' : ''" x-text="formatDip(item.maxPrice7d, item.currentPrice)"></span>
+                      <span :class="(isLongThresholdMet('7D', item) || getActiveSignal(item.coin, '7D', 'LONG')) ? 'text-emerald-300 font-black' : ''" x-text="formatDip(item.maxPrice7d, item.currentPrice)"></span>
                       <span class="text-[9px] text-slate-500" x-text="'(閾値 ≥' + getLongThreshold('7D') + '%)'"></span>
                     </div>
                   </div>
@@ -304,10 +309,15 @@ export function renderWebUI(): string {
                           x-text="getActiveSignal(item.coin, '30D', 'LONG').status === 'EXECUTED' ? '発注済' : '⚡検知中'"
                         ></span>
                       </template>
+                      <template x-if="!getActiveSignal(item.coin, '30D', 'LONG') && isLongThresholdOnly('30D', item)">
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-900/80 text-amber-300 border border-amber-600/80"
+                          x-text="'下落率>' + getAdditionalDipThreshold() + '%'"
+                        ></span>
+                      </template>
                     </div>
                     <div class="text-slate-200 font-bold" x-text="formatPrice(item.maxPrice30d)"></div>
                     <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span :class="(isLongEligible('30D', item) || getActiveSignal(item.coin, '30D', 'LONG')) ? 'text-emerald-300 font-black' : ''" x-text="formatDip(item.maxPrice30d, item.currentPrice)"></span>
+                      <span :class="(isLongThresholdMet('30D', item) || getActiveSignal(item.coin, '30D', 'LONG')) ? 'text-emerald-300 font-black' : ''" x-text="formatDip(item.maxPrice30d, item.currentPrice)"></span>
                       <span class="text-[9px] text-slate-500" x-text="'(閾値 ≥' + getLongThreshold('30D') + '%)'"></span>
                     </div>
                   </div>
@@ -324,10 +334,15 @@ export function renderWebUI(): string {
                           x-text="getActiveSignal(item.coin, '90D', 'LONG').status === 'EXECUTED' ? '発注済' : '⚡検知中'"
                         ></span>
                       </template>
+                      <template x-if="!getActiveSignal(item.coin, '90D', 'LONG') && isLongThresholdOnly('90D', item)">
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-900/80 text-amber-300 border border-amber-600/80"
+                          x-text="'下落率>' + getAdditionalDipThreshold() + '%'"
+                        ></span>
+                      </template>
                     </div>
                     <div class="text-slate-200 font-bold" x-text="formatPrice(item.maxPrice90d)"></div>
                     <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span :class="(isLongEligible('90D', item) || getActiveSignal(item.coin, '90D', 'LONG')) ? 'text-emerald-300 font-black' : ''" x-text="formatDip(item.maxPrice90d, item.currentPrice)"></span>
+                      <span :class="(isLongThresholdMet('90D', item) || getActiveSignal(item.coin, '90D', 'LONG')) ? 'text-emerald-300 font-black' : ''" x-text="formatDip(item.maxPrice90d, item.currentPrice)"></span>
                       <span class="text-[9px] text-slate-500" x-text="'(閾値 ≥' + getLongThreshold('90D') + '%)'"></span>
                     </div>
                   </div>
@@ -344,10 +359,15 @@ export function renderWebUI(): string {
                           x-text="getActiveSignal(item.coin, '180D', 'LONG').status === 'EXECUTED' ? '発注済' : '⚡検知中'"
                         ></span>
                       </template>
+                      <template x-if="!getActiveSignal(item.coin, '180D', 'LONG') && isLongThresholdOnly('180D', item)">
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-900/80 text-amber-300 border border-amber-600/80"
+                          x-text="'下落率>' + getAdditionalDipThreshold() + '%'"
+                        ></span>
+                      </template>
                     </div>
                     <div class="text-slate-200 font-bold" x-text="formatPrice(item.maxPrice180d)"></div>
                     <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span :class="(isLongEligible('180D', item) || getActiveSignal(item.coin, '180D', 'LONG')) ? 'text-emerald-300 font-black' : ''" x-text="formatDip(item.maxPrice180d, item.currentPrice)"></span>
+                      <span :class="(isLongThresholdMet('180D', item) || getActiveSignal(item.coin, '180D', 'LONG')) ? 'text-emerald-300 font-black' : ''" x-text="formatDip(item.maxPrice180d, item.currentPrice)"></span>
                       <span class="text-[9px] text-slate-500" x-text="'(閾値 ≥' + getLongThreshold('180D') + '%)'"></span>
                     </div>
                   </div>
@@ -364,10 +384,15 @@ export function renderWebUI(): string {
                           x-text="getActiveSignal(item.coin, '360D', 'LONG').status === 'EXECUTED' ? '発注済' : '⚡検知中'"
                         ></span>
                       </template>
+                      <template x-if="!getActiveSignal(item.coin, '360D', 'LONG') && isLongThresholdOnly('360D', item)">
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-900/80 text-amber-300 border border-amber-600/80"
+                          x-text="'下落率>' + getAdditionalDipThreshold() + '%'"
+                        ></span>
+                      </template>
                     </div>
                     <div class="text-slate-200 font-bold" x-text="formatPrice(item.maxPrice360d)"></div>
                     <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span :class="(isLongEligible('360D', item) || getActiveSignal(item.coin, '360D', 'LONG')) ? 'text-emerald-300 font-black' : ''" x-text="formatDip(item.maxPrice360d, item.currentPrice)"></span>
+                      <span :class="(isLongThresholdMet('360D', item) || getActiveSignal(item.coin, '360D', 'LONG')) ? 'text-emerald-300 font-black' : ''" x-text="formatDip(item.maxPrice360d, item.currentPrice)"></span>
                       <span class="text-[9px] text-slate-500" x-text="'(閾値 ≥' + getLongThreshold('360D') + '%)'"></span>
                     </div>
                   </div>
@@ -390,7 +415,7 @@ export function renderWebUI(): string {
                     </div>
                     <div class="text-slate-200 font-bold" x-text="formatPrice(item.minPrice24h)"></div>
                     <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span :class="(isShortEligible('24H', item) || getActiveSignal(item.coin, '24H', 'SHORT')) ? 'text-rose-300 font-black' : ''" x-text="formatSurge(item.minPrice24h, item.currentPrice)"></span>
+                      <span :class="(isShortThresholdMet('24H', item) || getActiveSignal(item.coin, '24H', 'SHORT')) ? 'text-rose-300 font-black' : ''" x-text="formatSurge(item.minPrice24h, item.currentPrice)"></span>
                       <span class="text-[9px] text-slate-500" x-text="'(閾値 ≥' + getShortThreshold('24H') + '%)'"></span>
                     </div>
                   </div>
@@ -407,10 +432,15 @@ export function renderWebUI(): string {
                           x-text="getActiveSignal(item.coin, '7D', 'SHORT').status === 'EXECUTED' ? '発注済' : '⚡検知中'"
                         ></span>
                       </template>
+                      <template x-if="!getActiveSignal(item.coin, '7D', 'SHORT') && isShortThresholdOnly('7D', item)">
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-900/80 text-amber-300 border border-amber-600/80"
+                          x-text="'上昇率>' + getAdditionalSurgeThreshold() + '%'"
+                        ></span>
+                      </template>
                     </div>
                     <div class="text-slate-200 font-bold" x-text="formatPrice(item.minPrice7d)"></div>
                     <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span :class="(isShortEligible('7D', item) || getActiveSignal(item.coin, '7D', 'SHORT')) ? 'text-rose-300 font-black' : ''" x-text="formatSurge(item.minPrice7d, item.currentPrice)"></span>
+                      <span :class="(isShortThresholdMet('7D', item) || getActiveSignal(item.coin, '7D', 'SHORT')) ? 'text-rose-300 font-black' : ''" x-text="formatSurge(item.minPrice7d, item.currentPrice)"></span>
                       <span class="text-[9px] text-slate-500" x-text="'(閾値 ≥' + getShortThreshold('7D') + '%)'"></span>
                     </div>
                   </div>
@@ -427,10 +457,15 @@ export function renderWebUI(): string {
                           x-text="getActiveSignal(item.coin, '30D', 'SHORT').status === 'EXECUTED' ? '発注済' : '⚡検知中'"
                         ></span>
                       </template>
+                      <template x-if="!getActiveSignal(item.coin, '30D', 'SHORT') && isShortThresholdOnly('30D', item)">
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-900/80 text-amber-300 border border-amber-600/80"
+                          x-text="'上昇率>' + getAdditionalSurgeThreshold() + '%'"
+                        ></span>
+                      </template>
                     </div>
                     <div class="text-slate-200 font-bold" x-text="formatPrice(item.minPrice30d)"></div>
                     <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span :class="(isShortEligible('30D', item) || getActiveSignal(item.coin, '30D', 'SHORT')) ? 'text-rose-300 font-black' : ''" x-text="formatSurge(item.minPrice30d, item.currentPrice)"></span>
+                      <span :class="(isShortThresholdMet('30D', item) || getActiveSignal(item.coin, '30D', 'SHORT')) ? 'text-rose-300 font-black' : ''" x-text="formatSurge(item.minPrice30d, item.currentPrice)"></span>
                       <span class="text-[9px] text-slate-500" x-text="'(閾値 ≥' + getShortThreshold('30D') + '%)'"></span>
                     </div>
                   </div>
@@ -447,10 +482,15 @@ export function renderWebUI(): string {
                           x-text="getActiveSignal(item.coin, '90D', 'SHORT').status === 'EXECUTED' ? '発注済' : '⚡検知中'"
                         ></span>
                       </template>
+                      <template x-if="!getActiveSignal(item.coin, '90D', 'SHORT') && isShortThresholdOnly('90D', item)">
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-900/80 text-amber-300 border border-amber-600/80"
+                          x-text="'上昇率>' + getAdditionalSurgeThreshold() + '%'"
+                        ></span>
+                      </template>
                     </div>
                     <div class="text-slate-200 font-bold" x-text="formatPrice(item.minPrice90d)"></div>
                     <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span :class="(isShortEligible('90D', item) || getActiveSignal(item.coin, '90D', 'SHORT')) ? 'text-rose-300 font-black' : ''" x-text="formatSurge(item.minPrice90d, item.currentPrice)"></span>
+                      <span :class="(isShortThresholdMet('90D', item) || getActiveSignal(item.coin, '90D', 'SHORT')) ? 'text-rose-300 font-black' : ''" x-text="formatSurge(item.minPrice90d, item.currentPrice)"></span>
                       <span class="text-[9px] text-slate-500" x-text="'(閾値 ≥' + getShortThreshold('90D') + '%)'"></span>
                     </div>
                   </div>
@@ -467,10 +507,15 @@ export function renderWebUI(): string {
                           x-text="getActiveSignal(item.coin, '180D', 'SHORT').status === 'EXECUTED' ? '発注済' : '⚡検知中'"
                         ></span>
                       </template>
+                      <template x-if="!getActiveSignal(item.coin, '180D', 'SHORT') && isShortThresholdOnly('180D', item)">
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-900/80 text-amber-300 border border-amber-600/80"
+                          x-text="'上昇率>' + getAdditionalSurgeThreshold() + '%'"
+                        ></span>
+                      </template>
                     </div>
                     <div class="text-slate-200 font-bold" x-text="formatPrice(item.minPrice180d)"></div>
                     <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span :class="(isShortEligible('180D', item) || getActiveSignal(item.coin, '180D', 'SHORT')) ? 'text-rose-300 font-black' : ''" x-text="formatSurge(item.minPrice180d, item.currentPrice)"></span>
+                      <span :class="(isShortThresholdMet('180D', item) || getActiveSignal(item.coin, '180D', 'SHORT')) ? 'text-rose-300 font-black' : ''" x-text="formatSurge(item.minPrice180d, item.currentPrice)"></span>
                       <span class="text-[9px] text-slate-500" x-text="'(閾値 ≥' + getShortThreshold('180D') + '%)'"></span>
                     </div>
                   </div>
@@ -487,10 +532,15 @@ export function renderWebUI(): string {
                           x-text="getActiveSignal(item.coin, '360D', 'SHORT').status === 'EXECUTED' ? '発注済' : '⚡検知中'"
                         ></span>
                       </template>
+                      <template x-if="!getActiveSignal(item.coin, '360D', 'SHORT') && isShortThresholdOnly('360D', item)">
+                        <span class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-900/80 text-amber-300 border border-amber-600/80"
+                          x-text="'上昇率>' + getAdditionalSurgeThreshold() + '%'"
+                        ></span>
+                      </template>
                     </div>
                     <div class="text-slate-200 font-bold" x-text="formatPrice(item.minPrice360d)"></div>
                     <div class="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span :class="(isShortEligible('360D', item) || getActiveSignal(item.coin, '360D', 'SHORT')) ? 'text-rose-300 font-black' : ''" x-text="formatSurge(item.minPrice360d, item.currentPrice)"></span>
+                      <span :class="(isShortThresholdMet('360D', item) || getActiveSignal(item.coin, '360D', 'SHORT')) ? 'text-rose-300 font-black' : ''" x-text="formatSurge(item.minPrice360d, item.currentPrice)"></span>
                       <span class="text-[9px] text-slate-500" x-text="'(閾値 ≥' + getShortThreshold('360D') + '%)'"></span>
                     </div>
                   </div>
@@ -817,9 +867,20 @@ export function renderWebUI(): string {
           ) || null;
         },
 
+        getAdditionalDipThreshold() {
+          return Number(this.config?.additionalDipThreshold24h ?? 3.82);
+        },
+
+        getAdditionalSurgeThreshold() {
+          return Number(this.config?.additionalSurgeThreshold24h ?? 3.82);
+        },
+
         getLongCellClass(tf, item) {
           if (this.isLongEligible(tf, item)) {
             return 'border-emerald-ok bg-emerald-ok/10 shadow-[0_0_12px_-3px_rgba(16,185,129,0.25)] ring-1 ring-emerald-ok/40';
+          }
+          if (this.isLongThresholdOnly(tf, item)) {
+            return 'border-emerald-ok/70 bg-emerald-ok/10 ring-1 ring-emerald-ok/30';
           }
           const sig = this.getActiveSignal(item?.coin, tf, 'LONG');
           if (sig) {
@@ -834,6 +895,9 @@ export function renderWebUI(): string {
           if (this.isShortEligible(tf, item)) {
             return 'border-crimson-err bg-crimson-err/10 shadow-[0_0_12px_-3px_rgba(244,63,94,0.25)] ring-1 ring-crimson-err/40';
           }
+          if (this.isShortThresholdOnly(tf, item)) {
+            return 'border-crimson-err/70 bg-crimson-err/10 ring-1 ring-crimson-err/30';
+          }
           const sig = this.getActiveSignal(item?.coin, tf, 'SHORT');
           if (sig) {
             return sig.status === 'EXECUTED'
@@ -843,34 +907,50 @@ export function renderWebUI(): string {
           return 'bg-obsidian/70 border-border-base/80';
         },
 
-        isLongEligible(tf, item) {
+        isLongThresholdMet(tf, item) {
           if (!item || !item.currentPrice || Number(item.currentPrice) <= 0) return false;
           const currentPx = Number(item.currentPrice);
           const maxPx = Number(item['maxPrice' + tf.toLowerCase()]);
           if (!maxPx || maxPx <= 0) return false;
           const dipPct = ((maxPx - currentPx) / maxPx) * 100;
-          if (dipPct < this.getLongThreshold(tf)) return false;
+          return dipPct >= this.getLongThreshold(tf);
+        },
+
+        isLongEligible(tf, item) {
+          if (!this.isLongThresholdMet(tf, item)) return false;
           if (tf === '24H') return true;
+          const currentPx = Number(item.currentPrice);
           const max24h = Number(item.maxPrice24h);
           if (!max24h || max24h <= 0) return false;
           const dip24hPct = ((max24h - currentPx) / max24h) * 100;
-          const addDipLimit = Number(this.config?.additionalDipThreshold24h ?? 3.82);
-          return dip24hPct >= addDipLimit;
+          return dip24hPct >= this.getAdditionalDipThreshold();
         },
 
-        isShortEligible(tf, item) {
+        isLongThresholdOnly(tf, item) {
+          return tf !== '24H' && this.isLongThresholdMet(tf, item) && !this.isLongEligible(tf, item);
+        },
+
+        isShortThresholdMet(tf, item) {
           if (!item || !item.currentPrice || Number(item.currentPrice) <= 0) return false;
           const currentPx = Number(item.currentPrice);
           const minPx = Number(item['minPrice' + tf.toLowerCase()]);
           if (!minPx || minPx <= 0) return false;
           const surgePct = ((currentPx - minPx) / minPx) * 100;
-          if (surgePct < this.getShortThreshold(tf)) return false;
+          return surgePct >= this.getShortThreshold(tf);
+        },
+
+        isShortEligible(tf, item) {
+          if (!this.isShortThresholdMet(tf, item)) return false;
           if (tf === '24H') return true;
+          const currentPx = Number(item.currentPrice);
           const min24h = Number(item.minPrice24h);
           if (!min24h || min24h <= 0) return false;
           const surge24hPct = ((currentPx - min24h) / min24h) * 100;
-          const addSurgeLimit = Number(this.config?.additionalSurgeThreshold24h ?? 3.82);
-          return surge24hPct >= addSurgeLimit;
+          return surge24hPct >= this.getAdditionalSurgeThreshold();
+        },
+
+        isShortThresholdOnly(tf, item) {
+          return tf !== '24H' && this.isShortThresholdMet(tf, item) && !this.isShortEligible(tf, item);
         },
 
         hasActiveTarget(item) {
