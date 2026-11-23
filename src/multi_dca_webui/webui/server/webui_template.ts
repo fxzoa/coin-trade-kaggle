@@ -1246,13 +1246,7 @@ export function renderWebUI(): string {
           const maxPx = Number(item['maxPrice' + tf.toLowerCase()]);
           if (!maxPx || maxPx <= 0) return false;
           const dipPct = ((maxPx - currentPx) / maxPx) * 100;
-          if (dipPct < this.getLongThreshold(tf)) return false;
-          if (tf === '24H') return true;
-          const max24h = Number(item.maxPrice24h);
-          if (!max24h || max24h <= 0) return false;
-          const dip24hPct = ((max24h - currentPx) / max24h) * 100;
-          const addDipLimit = Number(this.config?.additionalDipThreshold24h ?? 3.82);
-          return dip24hPct >= addDipLimit;
+          return dipPct >= this.getLongThreshold(tf);
         },
 
         isShortEligible(tf, item) {
@@ -1261,13 +1255,7 @@ export function renderWebUI(): string {
           const minPx = Number(item['minPrice' + tf.toLowerCase()]);
           if (!minPx || minPx <= 0) return false;
           const surgePct = ((currentPx - minPx) / minPx) * 100;
-          if (surgePct < this.getShortThreshold(tf)) return false;
-          if (tf === '24H') return true;
-          const min24h = Number(item.minPrice24h);
-          if (!min24h || min24h <= 0) return false;
-          const surge24hPct = ((currentPx - min24h) / min24h) * 100;
-          const addSurgeLimit = Number(this.config?.additionalSurgeThreshold24h ?? 3.82);
-          return surge24hPct >= addSurgeLimit;
+          return surgePct >= this.getShortThreshold(tf);
         },
 
         hasActiveTarget(item) {

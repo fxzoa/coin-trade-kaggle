@@ -998,17 +998,11 @@ export function renderWebUI(): string {
         },
 
         isLongEligible(tf, item) {
-          if (!this.isLongThresholdMet(tf, item)) return false;
-          if (tf === '24H') return true;
-          const currentPx = Number(item.currentPrice);
-          const max24h = Number(item.maxPrice24h);
-          if (!max24h || max24h <= 0) return false;
-          const dip24hPct = ((max24h - currentPx) / max24h) * 100;
-          return dip24hPct >= this.getAdditionalDipThreshold();
+          return this.isLongThresholdMet(tf, item);
         },
 
-        isLongThresholdOnly(tf, item) {
-          return tf !== '24H' && this.isLongThresholdMet(tf, item) && !this.isLongEligible(tf, item);
+        isLongThresholdOnly(_tf, _item) {
+          return false;
         },
 
         isShortThresholdMet(tf, item) {
@@ -1021,17 +1015,11 @@ export function renderWebUI(): string {
         },
 
         isShortEligible(tf, item) {
-          if (!this.isShortThresholdMet(tf, item)) return false;
-          if (tf === '24H') return true;
-          const currentPx = Number(item.currentPrice);
-          const min24h = Number(item.minPrice24h);
-          if (!min24h || min24h <= 0) return false;
-          const surge24hPct = ((currentPx - min24h) / min24h) * 100;
-          return surge24hPct >= this.getAdditionalSurgeThreshold();
+          return this.isShortThresholdMet(tf, item);
         },
 
-        isShortThresholdOnly(tf, item) {
-          return tf !== '24H' && this.isShortThresholdMet(tf, item) && !this.isShortEligible(tf, item);
+        isShortThresholdOnly(_tf, _item) {
+          return false;
         },
 
         hasActiveTarget(item) {
