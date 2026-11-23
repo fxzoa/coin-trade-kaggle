@@ -49,6 +49,10 @@ services:
       - ./data:/app/data
     env_file:
       - ./conf/price_monitor/.env
+    environment:
+      - REDIS_URL=redis://host.docker.internal:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   price-monitor-webui:
     build:
@@ -64,7 +68,10 @@ services:
     env_file:
       - ./conf/price_monitor_webui/.env
     environment:
+      - REDIS_URL=redis://host.docker.internal:6379
       - PORT=8005
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - price-monitor
     healthcheck:
@@ -86,9 +93,12 @@ services:
     env_file:
       - ./conf/dashboard_webui/.env
     environment:
+      - REDIS_URL=redis://host.docker.internal:6379
       - PORT=8080
       - HOST=0.0.0.0
       - URL_PRICE_SYNCER=http://price-monitor-webui:8005
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - price-monitor-webui
 
@@ -102,6 +112,10 @@ services:
       - ./data:/app/data
     env_file:
       - ./conf/btc_dca_bot/.env
+    environment:
+      - REDIS_URL=redis://host.docker.internal:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   btc-dca-webui:
     build:
@@ -116,7 +130,10 @@ services:
     env_file:
       - ./conf/btc_dca_webui/.env
     environment:
+      - REDIS_URL=redis://host.docker.internal:6379
       - PORT=8007
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   btc-grid-bot:
     build:
@@ -128,6 +145,10 @@ services:
       - ./data:/app/data
     env_file:
       - ./conf/btc_grid_bot/.env
+    environment:
+      - REDIS_URL=redis://host.docker.internal:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   btc-grid-webui:
     build:
@@ -142,7 +163,10 @@ services:
     env_file:
       - ./conf/btc_grid_webui/.env
     environment:
+      - REDIS_URL=redis://host.docker.internal:6379
       - PORT=8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   surge-dip-bot:
     build:
@@ -154,6 +178,10 @@ services:
       - ./data:/app/data
     env_file:
       - ./conf/surge_dip_bot/.env
+    environment:
+      - REDIS_URL=redis://host.docker.internal:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   surge-dip-webui:
     build:
@@ -168,7 +196,10 @@ services:
     env_file:
       - ./conf/surge_dip_webui/.env
     environment:
+      - REDIS_URL=redis://host.docker.internal:6379
       - PORT=8004
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   slack-alert-sender:
     build:
@@ -180,6 +211,10 @@ services:
       - ./data:/app/data
     env_file:
       - ./conf/slack_alert_sender/.env
+    environment:
+      - REDIS_URL=redis://host.docker.internal:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   slack-alert-webui:
     build:
@@ -194,7 +229,10 @@ services:
     env_file:
       - ./conf/slack_alert_webui/.env
     environment:
+      - REDIS_URL=redis://host.docker.internal:6379
       - PORT=8010
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   multi-dca-bot:
     build:
@@ -206,6 +244,10 @@ services:
       - ./data:/app/data
     env_file:
       - ./conf/multi_dca_bot/.env
+    environment:
+      - REDIS_URL=redis://host.docker.internal:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   multi-dca-webui:
     build:
@@ -220,7 +262,10 @@ services:
     env_file:
       - ./conf/multi_dca_webui/.env
     environment:
+      - REDIS_URL=redis://host.docker.internal:6379
       - PORT=8008
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   coin-trade-webui:
     build:
@@ -234,4 +279,21 @@ services:
     env_file:
       - ./conf/coin_trade_webui/.env
     environment:
+      - REDIS_URL=redis://host.docker.internal:6379
       - PORT=8013
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+
+  redis-tunnel:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.redis-tunnel
+    container_name: redis-tunnel
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./conf/redis_tunnel/id_key:/ssh/id_key:ro
+    env_file:
+      - ./conf/redis_tunnel/.env

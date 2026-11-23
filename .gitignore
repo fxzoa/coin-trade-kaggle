@@ -20,3 +20,4 @@ tmp/
 
 # Per-process environment secrets
 conf/*/.env
+conf/redis_tunnel/id_key
