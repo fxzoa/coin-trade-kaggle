@@ -252,9 +252,22 @@ export class DcaKvStore {
       const singleRaw = await this.client.get(`hl:evaluator:price_stats:${upper}`);
       if (singleRaw) {
         try {
-          return normalizeToPriceStatsRecord(JSON.parse(singleRaw), upper);
+          return await this.applyLivePrice(normalizeToPriceStatsRecord(JSON.parse(singleRaw), upper));
         } catch (e) {
           logger.warn(`[DcaKvStore] hl:evaluator:price_stats:${upper} パース失敗:`, toError(e));
+        }
+      }
+
+      // 4. 共有 Redis 一括キー: hl:evaluator:price_stats:all (フォールバック)
+      const allRaw = await this.client.get('hl:evaluator:price_stats:all');
+      if (allRaw) {
+        try {
+          const allMap = JSON.parse(allRaw);
+          if (allMap && typeof allMap === 'object' && allMap[upper]) {
+            return await this.applyLivePrice(normalizeToPriceStatsRecord(allMap[upper], upper));
+          }
+        } catch (e) {
+          logger.warn(`[DcaKvStore] hl:evaluator:price_stats:all パース失敗:`, toError(e));
         }
       }
 
@@ -263,6 +276,19 @@ export class DcaKvStore {
       logger.error(`[DcaKvStore] getPriceStats エラー (${upper}):`, toError(err));
       return null;
     }
+  }
+
+  private async applyLivePrice(rec: PriceStatsRecord): Promise<PriceStatsRecord> {
+    try {
+      const livePxStr = await this.client.hget('hl:prices', rec.coin.toUpperCase());
+      const livePx = parseFloat(livePxStr ?? '');
+      if (!isNaN(livePx) && livePx > 0) {
+        rec.currentPrice = livePx;
+      }
+    } catch {
+      // ignore
+    }
+    return rec;
   }
 
   async findPriceStats(coin: string): Promise<Result<PriceStatsRecord, NotFoundError | KvStoreError>> {
@@ -320,6 +346,30 @@ export class DcaKvStore {
           }
           return rec;
         });
+      }
+
+      // 3. 共有 Redis 一括キー: hl:evaluator:price_stats:all (フォールバック)
+      const allRaw = await this.client.get('hl:evaluator:price_stats:all');
+      if (allRaw) {
+        try {
+          const allMap = JSON.parse(allRaw);
+          if (allMap && typeof allMap === 'object') {
+            const records: PriceStatsRecord[] = [];
+            for (const [coin, val] of Object.entries(allMap)) {
+              if (val && typeof val === 'object') {
+                const rec = normalizeToPriceStatsRecord(val, coin);
+                const livePx = parseFloat(livePrices[coin.toUpperCase()] ?? '');
+                if (!isNaN(livePx) && livePx > 0) {
+                  rec.currentPrice = livePx;
+                }
+                records.push(rec);
+              }
+            }
+            if (records.length > 0) return records;
+          }
+        } catch (e) {
+          logger.warn('[DcaKvStore] hl:evaluator:price_stats:all パース失敗:', toError(e));
+        }
       }
 
       return [];
