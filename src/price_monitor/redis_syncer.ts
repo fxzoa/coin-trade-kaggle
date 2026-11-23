@@ -14,6 +14,7 @@ export class RedisSyncer {
   private prefix: string;
   private onLog: (msg: string) => void;
   private onError: (err: unknown) => void;
+  private consecutiveTransientErrors = 0;
 
   constructor(options: RedisSyncerOptions) {
     this.prefix = options.prefix;
@@ -30,6 +31,8 @@ export class RedisSyncer {
 
     this.client = new Redis(options.redisUrl, {
       maxRetriesPerRequest: 3,
+      keepAlive: 10000,
+      enableReadyCheck: true,
       retryStrategy: (times: number) => {
         const delay = Math.min(times * 500, 5000);
         return delay;
@@ -37,12 +40,28 @@ export class RedisSyncer {
     });
 
     this.client.on("connect", () => {
+      this.consecutiveTransientErrors = 0;
       this.onLog(`[Redis] 接続しました: ${options.redisUrl}`);
     });
 
+    this.client.on("ready", () => {
+      this.consecutiveTransientErrors = 0;
+    });
+
     this.client.on("error", (err: unknown) => {
-      const error = new RedisError(`[Redis] エラーが発生しました: ${toError(err).message}`, {
-        cause: toError(err),
+      const rawErr = toError(err);
+      const isTransient = /ECONNRESET|EPIPE|ETIMEDOUT/i.test(rawErr.message);
+      if (isTransient) {
+        this.consecutiveTransientErrors += 1;
+        if (this.consecutiveTransientErrors < 3) {
+          this.onLog(
+            `[Redis] 一時的な接続断を検知 (自動再接続待ち ${this.consecutiveTransientErrors}/3): ${rawErr.message}`,
+          );
+          return;
+        }
+      }
+      const error = new RedisError(`[Redis] エラーが発生しました: ${rawErr.message}`, {
+        cause: rawErr,
       });
       this.onError(error);
     });
