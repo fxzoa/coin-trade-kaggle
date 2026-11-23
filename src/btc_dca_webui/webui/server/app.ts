@@ -181,11 +181,20 @@ export function createApp(deps: AppDeps): Hono {
     });
   });
 
-  // 価格統計一覧 (現在設定されている targetCoins のみ抽出)
+  // 価格統計一覧 (現在設定されている targetCoins のみ抽出、欠落分は個別フォールバック取得)
   app.get('/api/stats', async (c) => {
-    const targetSet = new Set(config.targetCoins.map((coin) => coin.toUpperCase()));
+    const targetCoins = config.targetCoins.map((coin) => coin.toUpperCase());
+    const targetSet = new Set(targetCoins);
     const list = await store.getAllPriceStats();
     const filtered = list.filter((s) => targetSet.has(s.coin.toUpperCase()));
+    const foundSet = new Set(filtered.map((s) => s.coin.toUpperCase()));
+    const missing = targetCoins.filter((coin) => !foundSet.has(coin));
+    if (missing.length > 0) {
+      const fallbacks = await Promise.all(missing.map((coin) => store.getPriceStats(coin)));
+      for (const rec of fallbacks) {
+        if (rec) filtered.push(rec);
+      }
+    }
     return c.json(filtered);
   });
 
